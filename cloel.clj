@@ -23,7 +23,7 @@
     (.put call-results id promise)
     (println "Calling Elisp method:" method "with args:" args "and id:" id)  ; Debug print
     (send-to-client {:type :call :id id :method method :args args})
-    (let [result (deref promise 60000 :timeout)]  ; Increased timeout to 60 seconds
+    (let [result (deref promise 60000 :timeout)]  ; 60 second timeout
       (.remove call-results id)
       (if (= result :timeout)
         (do
@@ -33,8 +33,16 @@
           (println "Received result for id:" id ":" result)  ; Debug print
           result)))))
 
-(defn elisp-eval [form]
+(defn elisp-eval-sync [form]
   (elisp-call :eval form))
+
+(defn elisp-eval-async [func-name & args]
+  (let [id (generate-call-id)]
+    (println "Async calling Elisp function:" func-name "with args:" args "and id:" id)  ; Debug print
+    (send-to-client {:type :call :id id :method :eval-async :func func-name :args args})
+    (future
+      (let [result (apply elisp-call :eval-async func-name args)]
+        result))))
 
 (defn elisp-get-var [var-name]
   (elisp-call :get-var var-name))
@@ -73,9 +81,10 @@
       (Thread/sleep 100))
     (println "Client connected. Waiting 10 seconds before executing Elisp...")
     (Thread/sleep 10000) ; Wait for 10 seconds
-    (println "Executing Elisp function after 10 seconds:")
+    (println "Executing Elisp functions after 10 seconds:")
     (try
-      (println "Result of (+ 2 3):" (elisp-eval '(+ 2 3)))
+      (println "Sync Result of (+ 2 3):" (elisp-eval-sync '(+ 2 3)))
+      (println "Async Result of (+ 3 4):" @(elisp-eval-async "+" 3 4))
       (println "Value of user-full-name:" (elisp-get-var "user-full-name"))
       (catch Exception e
         (println "Error executing Elisp:" (.getMessage e))))

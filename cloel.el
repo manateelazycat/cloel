@@ -117,7 +117,13 @@
   (if (process-live-p cloel-server-process)
       (progn
         (message "Sending to server: %S" message) ; Debug print
-        (process-send-string cloel-server-process (concat (parseedn-print-str message) "\n")))
+        (let ((encoded-message
+               (condition-case err
+                   (parseedn-print-str message)
+                 (error
+                  (message "Error encoding message: %S" err)
+                  (prin1-to-string message)))))
+          (process-send-string cloel-server-process (concat encoded-message "\n"))))
     (error "Not connected to Clojure server")))
 
 (defun cloel-process-filter (proc output)
@@ -143,6 +149,7 @@
 (defun cloel-handle-call (proc data)
   (let* ((id (gethash :id data))
          (method (gethash :method data))
+         (func (gethash :func data))
          (args (gethash :args data))
          result)
     (message "Handling call: %S" data)  ; Debug print
@@ -150,6 +157,12 @@
         (setq result
               (cond
                ((eq method :eval) (eval (car args)))
+               ((eq method :eval-async)
+                (let ((func-name (or func (car args)))
+                      (func-args (if func args (cdr args))))
+                  (if (and (stringp func-name) (fboundp (intern func-name)))
+                      (apply (intern func-name) func-args)
+                    (error "Invalid function or arguments"))))
                ((eq method :get-var) (symbol-value (intern (car args))))
                (t (error "Unknown method: %s" method))))
       (error (setq result (cons 'error (error-message-string err)))))
@@ -157,7 +170,10 @@
     (let ((response (make-hash-table :test 'equal)))
       (puthash :type :return response)
       (puthash :id id response)
-      (puthash :value result response)
+      (puthash :value (if (and (consp result) (eq (car result) 'error))
+                          (format "%s" (cdr result))
+                        result)
+               response)
       (message "Sending response: %S" response) ; Debug print
       (cloel-send-message response))))
 
@@ -180,4 +196,5 @@
 (cloel-add-receive-hook 'my-message-handler)
 
 (provide 'cloel)
+
 ;;; cloel.el ends here
