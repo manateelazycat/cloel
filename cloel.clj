@@ -2,10 +2,10 @@
   (:import [java.net ServerSocket Socket]
            [java.io BufferedReader InputStreamReader PrintWriter]))
 
-(def clients (atom {}))
+(def client-connection (atom nil))
 
-(defn send-to-all-clients [message]
-  (doseq [[socket writer] @clients]
+(defn send-to-client [message]
+  (when-let [writer (:writer @client-connection)]
     (.println writer message)
     (.flush writer)))
 
@@ -13,18 +13,19 @@
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
         reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket)))
         writer (PrintWriter. (.getOutputStream client-socket))]
-    (swap! clients assoc client-socket writer)
+    (reset! client-connection {:socket client-socket :reader reader :writer writer})
+    (println "Client connected:" client-id)
     (try
       (while true
         (let [input (.readLine reader)]
           (if input
             (do
-              (println "Received from" client-id ":" input)
-              (send-to-all-clients (str "Client " client-id " says: " input)))
+              (println "Received from client:" input)
+              (send-to-client (str "Server echoes: " input)))
             (throw (Exception. "Client disconnected")))))
       (catch Exception e
-        (println "Client" client-id "disconnected:" (.getMessage e))
-        (swap! clients dissoc client-socket)
+        (println "Client disconnected:" (.getMessage e))
+        (reset! client-connection nil)
         (.close client-socket)))))
 
 (defn start-server [port]
@@ -32,13 +33,17 @@
     (println "Server started on port" port)
     (future
       (while true
-        (let [client-socket (.accept server-socket)]
-          (future (handle-client client-socket)))))
+        (when (nil? @client-connection)
+          (let [client-socket (.accept server-socket)]
+            (handle-client client-socket)))))
     (loop []
       (let [input (read-line)]
         (when input
-          (println "Server broadcasting:" input)
-          (send-to-all-clients (str "Server says: " input))
+          (if @client-connection
+            (do
+              (println "Server sending:" input)
+              (send-to-client (str "Server says: " input)))
+            (println "No client connected. Message not sent."))
           (recur))))))
 
 (defn parse-port [args]
