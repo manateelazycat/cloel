@@ -101,6 +101,9 @@
 (defvar cloel-server-process nil
   "The network process connected to the Clojure server.")
 
+(defvar cloel-receive-hook nil
+  "Hook run when a message is received from the server.")
+
 (defun cloel-connect (host port)
   "Establish a connection to a Clojure server at HOST:PORT."
   (let ((port-num (if (stringp port) (string-to-number port) port)))
@@ -130,13 +133,27 @@
   "Handle output from the Clojure server."
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
-    (insert output)))
+    (insert output))
+  (message "Received from server: %s" (string-trim output))
+  (run-hook-with-args 'cloel-receive-hook output))
 
 (defun cloel-process-sentinel (proc event)
   "Monitor the network connection."
   (when (string-match "\\(closed\\|connection broken by remote peer\\)" event)
     (message "Connection to server was closed")
     (setq cloel-server-process nil)))
+
+(defun cloel-add-receive-hook (func)
+  "Add a function to be called when a message is received."
+  (add-hook 'cloel-receive-hook func))
+
+(defun cloel-remove-receive-hook (func)
+  "Remove a function from the receive hook."
+  (remove-hook 'cloel-receive-hook func))
+
+(defun my-message-handler (message)
+  (message "Custom handler received: %s" message))
+(cloel-add-receive-hook 'my-message-handler)
 
 (provide 'cloel)
 
