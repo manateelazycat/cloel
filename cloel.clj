@@ -33,15 +33,15 @@
           (println "Received result for id:" id ":" result)  ; Debug print
           result)))))
 
-(defn elisp-eval-sync [form]
-  (elisp-call :eval form))
+(defn elisp-eval-sync [func & args]
+  (elisp-call :eval func args))
 
-(defn elisp-eval-async [func-name & args]
+(defn elisp-eval-async [func & args]
   (let [id (generate-call-id)]
-    (println "Async calling Elisp function:" func-name "with args:" args "and id:" id)  ; Debug print
-    (send-to-client {:type :call :id id :method :eval-async :func func-name :args args})
+    (println "Async calling Elisp function:" func "with args:" args "and id:" id)  ; Debug print
+    (send-to-client {:type :call :id id :method :eval-async :func func :args args})
     (future
-      (let [result (apply elisp-call :eval-async func-name args)]
+      (let [result (apply elisp-call :eval-async func args)]
         result))))
 
 (defn elisp-get-var [var-name]
@@ -83,7 +83,7 @@
     (Thread/sleep 10000) ; Wait for 10 seconds
     (println "Executing Elisp functions after 10 seconds:")
     (try
-      (println "Sync Result of (+ 2 3):" (elisp-eval-sync '(+ 2 3)))
+      (println "Sync Result of (+ 2 3):" (elisp-eval-sync "+" 2 3))
       (println "Async Result of (+ 3 4):" @(elisp-eval-async "+" 3 4))
       (println "Value of user-full-name:" (elisp-get-var "user-full-name"))
       (catch Exception e

@@ -156,13 +156,14 @@
     (condition-case err
         (setq result
               (cond
-               ((eq method :eval) (eval (car args)))
+               ((eq method :eval)
+                (if (and (stringp (car args)) (fboundp (intern (car args))))
+                    (apply (intern (car args)) (car (cdr args)))
+                  (error "Invalid function or arguments")))
                ((eq method :eval-async)
-                (let ((func-name (or func (car args)))
-                      (func-args (if func args (cdr args))))
-                  (if (and (stringp func-name) (fboundp (intern func-name)))
-                      (apply (intern func-name) func-args)
-                    (error "Invalid function or arguments"))))
+                (if (and (stringp func) (fboundp (intern func)))
+                    (apply (intern func) args)
+                  (error "Invalid function or arguments")))
                ((eq method :get-var) (symbol-value (intern (car args))))
                (t (error "Unknown method: %s" method))))
       (error (setq result (cons 'error (error-message-string err)))))
