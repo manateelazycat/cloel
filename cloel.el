@@ -83,20 +83,8 @@
 
 
 ;;; Code:
-(defun cloel-get-free-port ()
-  (save-excursion
-    (let* ((process-buffer " *cloel-temp*")
-           (process (make-network-process
-                     :name process-buffer
-                     :buffer process-buffer
-                     :family 'ipv4
-                     :server t
-                     :host "127.0.0.1"
-                     :service t))
-           (port (process-contact process :service)))
-      (delete-process process)
-      (kill-buffer process-buffer)
-      (format "%s" port))))
+(require 'cl-lib)
+(require 'parseedn)
 
 (defvar cloel-server-process nil
   "The network process connected to the Clojure server.")
@@ -109,6 +97,7 @@
   (let ((port-num (if (stringp port) (string-to-number port) port)))
     (setq cloel-server-process
           (open-network-stream "cloel-client" "*cloel-client*" host port-num))
+    (set-process-coding-system cloel-server-process 'utf-8 'utf-8)
     (if (process-live-p cloel-server-process)
         (progn
           (set-process-filter cloel-server-process 'cloel-process-filter)
@@ -126,16 +115,51 @@
 (defun cloel-send-message (message)
   "Send MESSAGE to the connected Clojure server."
   (if (process-live-p cloel-server-process)
-      (process-send-string cloel-server-process (concat message "\n"))
+      (progn
+        (message "Sending to server: %S" message) ; Debug print
+        (process-send-string cloel-server-process (concat (parseedn-print-str message) "\n")))
     (error "Not connected to Clojure server")))
 
 (defun cloel-process-filter (proc output)
   "Handle output from the Clojure server."
+  (message "Raw output received: %S" output) ; Debug print
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
     (insert output))
-  (message "Received from server: %s" (string-trim output))
-  (run-hook-with-args 'cloel-receive-hook output))
+  (let ((data (condition-case err
+                  (parseedn-read-str output)
+                (error (message "Error parsing output: %S" err) nil))))
+    (message "Parsed data: %S" data)    ; Debug print
+    (when data
+      (if (and (hash-table-p data) (gethash :type data))
+          (cl-case (gethash :type data)
+            (:call (cloel-handle-call proc data))
+            (:message (message "Server says: %s" (gethash :content data)))
+            (t (message "Received unknown message type: %s" (gethash :type data))))
+        (progn
+          (message "Received from server: %s" (if (stringp data) (string-trim data) data))
+          (run-hook-with-args 'cloel-receive-hook output))))))
+
+(defun cloel-handle-call (proc data)
+  (let* ((id (gethash :id data))
+         (method (gethash :method data))
+         (args (gethash :args data))
+         result)
+    (message "Handling call: %S" data)  ; Debug print
+    (condition-case err
+        (setq result
+              (cond
+               ((eq method :eval) (eval (car args)))
+               ((eq method :get-var) (symbol-value (intern (car args))))
+               (t (error "Unknown method: %s" method))))
+      (error (setq result (cons 'error (error-message-string err)))))
+    (message "Call result: %S" result)  ; Debug print
+    (let ((response (make-hash-table :test 'equal)))
+      (puthash :type :return response)
+      (puthash :id id response)
+      (puthash :value result response)
+      (message "Sending response: %S" response) ; Debug print
+      (cloel-send-message response))))
 
 (defun cloel-process-sentinel (proc event)
   "Monitor the network connection."
@@ -156,5 +180,4 @@
 (cloel-add-receive-hook 'my-message-handler)
 
 (provide 'cloel)
-
 ;;; cloel.el ends here
