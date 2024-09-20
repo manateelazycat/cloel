@@ -9,3 +9,4 @@ workspace/
 .clj-kondo
 .lsp
 .cpcache
+target
