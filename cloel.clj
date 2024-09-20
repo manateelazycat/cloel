@@ -49,10 +49,13 @@
 
 (defn handle-clojure-call [data]
   (let [{:keys [func args]} data]
-    (try
-      (println "Elisp function result:" (apply (resolve (symbol func)) args))
-      (catch Exception e
-        (println "Error in Clojure call:" (.getMessage e))))))
+    (future
+      (try
+        (println "Executing Clojure function:" func "with args:" args)
+        (let [result (apply (resolve (symbol func)) args)]
+          (println "Clojure function result:" result))
+        (catch Exception e
+          (println "Error in Clojure call:" (.getMessage e)))))))
 
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
