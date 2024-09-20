@@ -149,7 +149,6 @@
 (defun cloel-handle-call (proc data)
   (let* ((id (gethash :id data))
          (method (gethash :method data))
-         (func (gethash :func data))
          (args (gethash :args data))
          result)
     (message "Handling call: %S" data)  ; Debug print
@@ -161,8 +160,8 @@
                     (apply (intern (car args)) (car (cdr args)))
                   (error "Invalid function or arguments")))
                ((eq method :eval-async)
-                (if (and (stringp func) (fboundp (intern func)))
-                    (apply (intern func) args)
+                (if (and (stringp (car args)) (fboundp (intern (car args))))
+                    (apply (intern (car args)) (cdr args))
                   (error "Invalid function or arguments")))
                ((eq method :get-var) (symbol-value (intern (car args))))
                (t (error "Unknown method: %s" method))))
