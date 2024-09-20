@@ -13,9 +13,4 @@
 
 (alter-var-root #'cloel/handle-clojure-call (constantly custom-handle-clojure-call))
 
-(defn -main [& args]
-  (let [port (Integer/parseInt (first args))]
-    (println "Starting app server on port" port)
-    (cloel/start-server port)))
-
-(apply -main *command-line-args*)
+(cloel/start-server (Integer/parseInt (first *command-line-args*)))
