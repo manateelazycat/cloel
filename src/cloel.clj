@@ -39,7 +39,7 @@
       (let [result (apply elisp-call :eval-async func args)]
         result))))
 
-(defn elisp-message [& args]
+(defn elisp-show-message [& args]
   (let [message (apply str args)]
     (elisp-eval-async "message" message)))
 
@@ -73,7 +73,7 @@
                 (when-let [promise (.get call-results (:id data))]
                   (deliver promise (:value data)))
 
-                (and (map? data) (= (:type data) :clojure-call))
+                (and (map? data) (= (:type data) :call-async))
                 (handle-client-method-call data)
 
                 :else

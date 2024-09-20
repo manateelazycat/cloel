@@ -16,4 +16,4 @@
 
 (defun cloel-demo-hello-confirm ()
   ;; STEP 8: Call Clojure method "app-success" ASYNC.
-  (cloel-demo-call-clojure "app-success" "Cloel rocks!"))
+  (cloel-demo-call-async "app-success" "Cloel rocks!"))

@@ -39,14 +39,17 @@ Key advantages:
 ## Development
 Main APIs, replace `app` with your application name:
 
+Elisp API:
 - `cloel-register-app`: Register an application, requires app name and path to Clojure code
 - `cloel-app-start/stop/restart-process`: Manage Clojure processes
 - `cloel-app-send-message`: Elisp asynchronously sends messages to Clojure
-- `cloel-app-call-clojure`: Elisp asynchronously calls Clojure functions
+- `cloel-app-call-async`: Elisp asynchronously calls Clojure functions
+
+Clojure API:
 - `cloel/start-server`: Start Clojure process
 - `alter-var-root`: Reload Cloel core callback handling functions on the application side, see `demo/app.clj` for details
+- `cloel/elisp-show-message`: Clojure asynchronously show message in minibuffer
 - `cloel/elisp-eval-async`: Clojure asynchronously calls Elisp functions
-- `cloel/elisp-message`: Clojure asynchronously sends messages to Emacs
 - `cloel/elisp-eval-sync`: Clojure synchronously calls Elisp functions
 - `cloel/elisp-get-var`: Clojure synchronously gets Elisp variable values
 

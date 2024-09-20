@@ -39,14 +39,17 @@ Cloel 是一个结合 Clojure 和 Elisp 的协同编程框架， 利用 Clojure 
 ## 开发
 主要 API, 将 `app` 替换为你的应用名:
 
+Elisp API:
 - `cloel-register-app`: 注册应用, 需要输入应用名和 Clojure 代码的路径， 应用名以 `app` 为例
 - `cloel-app-start/stop/restart-process`: 管理 Clojure 进程
 - `cloel-app-send-message`: Elisp 异步发送消息给 Clojure 
-- `cloel-app-call-clojure`: Elisp 异步调用 Clojure 函数
+- `cloel-app-call-async`: Elisp 异步调用 Clojure 函数
+
+Clojure API:
 - `cloel/start-server`: 启动 Clojure 进程
 - `alter-var-root`: 在应用端重载 Cloel 核心的回调处理函数， 具体请看 `demo/app.clj`
+- `cloel/elisp-show-message`: Clojure 异步在 minibuffer 显示消息
 - `cloel/elisp-eval-async`: Clojure 异步调用 Elisp 函数
-- `cloel/elisp-message`: Clojure 异步发送消息到 Emacs
 - `cloel/elisp-eval-sync`: Clojure 同步调用 Elisp 函数
 - `cloel/elisp-get-var`: Clojure 同步获取 Elisp 变量值
 

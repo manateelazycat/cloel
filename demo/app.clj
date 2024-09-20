@@ -30,7 +30,7 @@
 
 (defn app-success [message]
   ;; STEP 9: Send message to Emacs ASYNC.
-  (cloel/elisp-message message))
+  (cloel/elisp-show-message message))
 
 (alter-var-root #'cloel/handle-client-method-call (constantly app-handle-client-method-call))
 (alter-var-root #'cloel/handle-client-message (constantly app-handle-client-message))

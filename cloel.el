@@ -98,7 +98,7 @@
   (let ((start-func-name (intern (format "cloel-%s-start-process" app-name)))
         (stop-func-name (intern (format "cloel-%s-stop-process" app-name)))
         (restart-func-name (intern (format "cloel-%s-restart-process" app-name)))
-        (call-clojure-func-name (intern (format "cloel-%s-call-clojure" app-name)))
+        (call-async-func-name (intern (format "cloel-%s-call-async" app-name)))
         (send-message-func-name (intern (format "cloel-%s-send-message" app-name))))
 
     (fset start-func-name
@@ -116,15 +116,15 @@
              (interactive)
              (cloel-restart-process ',app-name)))
 
-    (fset call-clojure-func-name
+    (fset call-async-func-name
           `(lambda (func &rest args)
-             (apply 'cloel-call-clojure ',app-name func args)))
+             (apply 'cloel-call-async ',app-name func args)))
 
     (fset send-message-func-name
           `(lambda (message)
              (cloel-send-message ',app-name message)))
 
-    (list start-func-name stop-func-name restart-func-name call-clojure-func-name send-message-func-name)))
+    (list start-func-name stop-func-name restart-func-name call-async-func-name send-message-func-name)))
 
 (defun cloel-register-app (app-name app-file)
   "Register an app with APP-NAME and APP-FILE."
@@ -297,11 +297,11 @@
     (message "Connection to server for %s was closed" app-name)
     (cloel-set-app-data app-name :server-process nil)))
 
-(defun cloel-call-clojure (app-name func &rest args)
+(defun cloel-call-async (app-name func &rest args)
   "Call Clojure function FUNC with ARGS for APP-NAME."
   (cloel-send-message app-name
                       (let ((message (make-hash-table :test 'equal)))
-                        (puthash :type :clojure-call message)
+                        (puthash :type :call-async message)
                         (puthash :func func message)
                         (puthash :args args message)
                         message)))
