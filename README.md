@@ -1,3 +1,5 @@
+[English](./README.md) | 简体中文
+
 # Cloel
 
 Cloel 是一个结合 Clojure 和 Elisp 的协同编程框架， 利用 Clojure 的生态和多线程能力来扩展 Emacs。
