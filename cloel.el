@@ -236,14 +236,13 @@
   "Send MESSAGE to the connected Clojure server for APP-NAME."
   (let ((process (plist-get (cloel-get-app-data app-name) :server-process)))
     (if (process-live-p process)
-        (progn
-          (let ((encoded-message
-                 (condition-case err
-                     (parseedn-print-str message)
-                   (error
-                    (message "Error encoding message: %S" err)
-                    (prin1-to-string message)))))
-            (process-send-string process (concat encoded-message "\n"))))
+        (let ((encoded-message
+               (condition-case err
+                   (parseedn-print-str message)
+                 (error
+                  (message "Error encoding message: %S" err)
+                  (prin1-to-string message)))))
+          (process-send-string process (concat encoded-message "\n")))
       (error "Not connected to Clojure server for %s" app-name))))
 
 (defun cloel-process-filter (proc output app-name)
