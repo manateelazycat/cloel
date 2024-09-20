@@ -47,6 +47,13 @@
 (defn elisp-get-var [var-name]
   (elisp-call :get-var var-name))
 
+(defn handle-clojure-call [data]
+  (let [{:keys [func args]} data]
+    (try
+      (println "Elisp function result:" (apply (resolve (symbol func)) args))
+      (catch Exception e
+        (println "Error in Clojure call:" (.getMessage e))))))
+
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
         reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket)))
@@ -59,9 +66,16 @@
           (if input
             (let [data (edn/read-string input)]
               (println "Received from client:" data)
-              (when (and (map? data) (= (:type data) :return))
+              (cond
+                (and (map? data) (= (:type data) :return))
                 (when-let [promise (.get call-results (:id data))]
-                  (deliver promise (:value data)))))
+                  (deliver promise (:value data)))
+
+                (and (map? data) (= (:type data) :clojure-call))
+                (handle-clojure-call data)
+
+                :else
+                (println "Received unknown data type:" data)))
             (throw (Exception. "Client disconnected")))))
       (catch Exception e
         (println "Client disconnected:" (.getMessage e))

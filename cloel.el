@@ -191,10 +191,18 @@
   "Remove a function from the receive hook."
   (remove-hook 'cloel-receive-hook func))
 
+(defun cloel-call-clojure (func &rest args)
+  "Call Clojure function FUNC with ARGS."
+  (cloel-send-message
+   (let ((message (make-hash-table :test 'equal)))
+     (puthash :type :clojure-call message)
+     (puthash :func func message)
+     (puthash :args args message)
+     message)))
+
 (defun my-message-handler (message)
   (message "Custom handler received: %s" message))
 (cloel-add-receive-hook 'my-message-handler)
 
 (provide 'cloel)
-
 ;;; cloel.el ends here
