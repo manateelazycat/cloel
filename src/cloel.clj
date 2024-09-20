@@ -114,12 +114,3 @@
               (send-to-client {:type :message :content input}))
             (println "No client connected. Message not sent."))
           (recur))))))
-
-(defn -main [& args]
-  (let [port (if (seq args)
-               (Integer/parseInt (first args))
-               8080)]
-    (println "Starting TCP server on port" port)
-    (start-server port)))
-
-(apply -main *command-line-args*)

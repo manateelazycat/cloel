@@ -102,7 +102,7 @@
   "Delay in seconds between connection retries.")
 
 (defvar cloel-clojure-file
-  (expand-file-name "cloel.clj" (file-name-directory load-file-name))
+  (expand-file-name "demo/app.clj" (file-name-directory load-file-name))
   "Path to the cloel.clj file.")
 
 (defun cloel-get-free-port ()

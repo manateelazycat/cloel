@@ -8,3 +8,4 @@ test.log
 workspace/
 .clj-kondo
 .lsp
+.cpcache
