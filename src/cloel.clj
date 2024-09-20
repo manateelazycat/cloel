@@ -51,9 +51,12 @@
 (defn elisp-get-var [var-name]
   (elisp-call :get-var var-name))
 
-(defn ^:dynamic handle-clojure-call [data]
+(defn ^:dynamic handle-client-method-call [data]
   (let [{:keys [func args]} data]
     (println "Executing Clojure function:" func "with args:" args)))
+
+(defn ^:dynamic handle-client-message [data]
+  (println "Received message:" data))
 
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
@@ -73,10 +76,11 @@
                   (deliver promise (:value data)))
 
                 (and (map? data) (= (:type data) :clojure-call))
-                (handle-clojure-call data)
+                (handle-client-method-call data)
 
                 :else
-                (println "Received message:" data)))
+                (handle-client-message data)
+                ))
             (throw (Exception. "Client disconnected")))))
       (catch Exception e
         (println "Client disconnected:" (.getMessage e))
