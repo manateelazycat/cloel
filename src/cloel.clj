@@ -44,18 +44,16 @@
       (let [result (apply elisp-call :eval-async func args)]
         result))))
 
+(defn elisp-message [& args]
+  (let [message (apply str args)]
+    (elisp-eval-async "message" message)))
+
 (defn elisp-get-var [var-name]
   (elisp-call :get-var var-name))
 
 (defn ^:dynamic handle-clojure-call [data]
   (let [{:keys [func args]} data]
-    (future
-      (try
-        (println "Executing Clojure function:" func "with args:" args)
-        (let [result (apply (resolve (symbol func)) args)]
-          (println "Clojure function result:" result))
-        (catch Exception e
-          (println "Error in Clojure call:" (.getMessage e)))))))
+    (println "Executing Clojure function:" func "with args:" args)))
 
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
@@ -78,7 +76,7 @@
                 (handle-clojure-call data)
 
                 :else
-                (println "Received unknown data type:" data)))
+                (println "Received message:" data)))
             (throw (Exception. "Client disconnected")))))
       (catch Exception e
         (println "Client disconnected:" (.getMessage e))
@@ -96,21 +94,7 @@
     (println "Waiting for client connection...")
     (while (nil? @client-connection)
       (Thread/sleep 100))
-    (println "Client connected. Waiting 10 seconds before executing Elisp...")
-    (Thread/sleep 10000) ; Wait for 10 seconds
-    (println "Executing Elisp functions after 10 seconds:")
-    (try
-      (println "Sync Result of (+ 2 3):" (elisp-eval-sync "+" 2 3))
-      (println "Async Result of (+ 3 4):" @(elisp-eval-async "+" 3 4))
-      (println "Value of user-full-name:" (elisp-get-var "user-full-name"))
-      (catch Exception e
-        (println "Error executing Elisp:" (.getMessage e))))
     (loop []
       (let [input (read-line)]
         (when input
-          (if @client-connection
-            (do
-              (println "Server sending:" input)
-              (send-to-client {:type :message :content input}))
-            (println "No client connected. Message not sent."))
           (recur))))))

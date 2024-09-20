@@ -87,9 +87,6 @@
 (defvar cloel-apps (make-hash-table :test 'equal)
   "Hash table to store app-specific data.")
 
-(defvar cloel-receive-hook nil
-  "Hook run when a message is received from the server.")
-
 (defvar cloel-max-retries 5
   "Maximum number of connection retries.")
 
@@ -268,9 +265,7 @@
             (:call (cloel-handle-call proc data app-name))
             (:message (message "Server for %s says: %s" app-name (gethash :content data)))
             (t (message "Received unknown message type for %s: %s" app-name (gethash :type data))))
-        (progn
-          (message "Received from server for %s: %s" app-name (if (stringp data) (string-trim data) data))
-          (run-hook-with-args 'cloel-receive-hook output app-name))))))
+        ))))
 
 (defun cloel-handle-call (proc data app-name)
   "Handle a call from the Clojure server for APP-NAME."
@@ -318,20 +313,6 @@
                         (puthash :func func message)
                         (puthash :args args message)
                         message)))
-
-(defun cloel-add-receive-hook (func)
-  "Add a function to be called when a message is received."
-  (add-hook 'cloel-receive-hook func))
-
-(defun cloel-remove-receive-hook (func)
-  "Remove a function from the receive hook."
-  (remove-hook 'cloel-receive-hook func))
-
-(defun my-message-handler (message app-name)
-  "Custom handler for messages received from APP-NAME."
-  (message "Custom handler received from %s: %s" app-name message))
-
-(cloel-add-receive-hook 'my-message-handler)
 
 (provide 'cloel)
 ;;; cloel.el ends here
