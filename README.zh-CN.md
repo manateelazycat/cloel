@@ -13,9 +13,9 @@ Cloel 是一个结合 Clojure 和 Elisp 的协同编程框架， 利用 Clojure 
 
 ## 安装
 
-1. 安装 Clojure, 参考[官方手册](https://clojure.org/guides/install_clojure)
+1. 安装 Clojure, 参考 [官方手册](https://clojure.org/guides/install_clojure)
 
-2. 安装 Elisp 依赖： [parseedn](https://github.com/clojure-emacs/parseedn)
+2. 安装 [parseedn](https://github.com/clojure-emacs/parseedn)
 
 3. 安装 Cloel Elisp 部分：
    克隆仓库并添加到 Emacs 配置：

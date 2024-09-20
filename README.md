@@ -15,7 +15,7 @@ Key advantages:
 
 1. Install Clojure, refer to the [official guide](https://clojure.org/guides/install_clojure)
 
-2. Install Elisp dependency: [parseedn](https://github.com/clojure-emacs/parseedn)
+2. Install [parseedn](https://github.com/clojure-emacs/parseedn)
 
 3. Install Cloel Elisp part:
    Clone the repository and add to your Emacs configuration:
