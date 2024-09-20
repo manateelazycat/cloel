@@ -16,7 +16,7 @@
 (defn generate-call-id []
   (swap! call-id inc))
 
-(defn elisp-call [method & args]
+(defn ^:export elisp-call [method & args]
   (let [id (generate-call-id)
         promise (promise)]
     (.put call-results id promise)
@@ -24,10 +24,8 @@
     (let [result (deref promise 60000 :timeout)]  ; 60 second timeout
       (.remove call-results id)
       (if (= result :timeout)
-        (do
-          (throw (Exception. (str "Timeout waiting for Elisp response for id: " id))))
-        (do
-          result)))))
+        (throw (Exception. (str "Timeout waiting for Elisp response for id: " id)))
+        result))))
 
 (defn ^:export elisp-eval-sync [func & args]
   (elisp-call :eval func args))
