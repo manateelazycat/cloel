@@ -29,21 +29,21 @@
         (do
           result)))))
 
-(defn elisp-eval-sync [func & args]
+(defn ^:export elisp-eval-sync [func & args]
   (elisp-call :eval func args))
 
-(defn elisp-eval-async [func & args]
+(defn ^:export elisp-eval-async [func & args]
   (let [id (generate-call-id)]
     (send-to-client {:type :call :id id :method :eval-async :func func :args args})
     (future
       (let [result (apply elisp-call :eval-async func args)]
         result))))
 
-(defn elisp-show-message [& args]
+(defn ^:export elisp-show-message [& args]
   (let [message (apply str args)]
     (elisp-eval-async "message" message)))
 
-(defn elisp-get-var [var-name]
+(defn ^:export elisp-get-var [var-name]
   (elisp-call :get-var var-name))
 
 (defn ^:dynamic handle-client-method-call [data]
@@ -85,7 +85,7 @@
         (reset! client-connection nil)
         (.close client-socket)))))
 
-(defn start-server [port]
+(defn ^:export start-server [port]
   (let [server-socket (ServerSocket. port)]
     (println "Server started on port" port)
     (future
