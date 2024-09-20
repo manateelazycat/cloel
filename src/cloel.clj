@@ -31,11 +31,9 @@
   (elisp-call :eval func args))
 
 (defn ^:export elisp-eval-async [func & args]
-  (let [id (generate-call-id)]
-    (send-to-client {:type :call :id id :method :eval-async :func func :args args})
-    (future
-      (let [result (apply elisp-call :eval-async func args)]
-        result))))
+  (future
+    (elisp-call :eval func args)
+    ))
 
 (defn ^:export elisp-show-message [& args]
   (let [message (apply str args)]
