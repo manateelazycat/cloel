@@ -1,4 +1,4 @@
-(ns tcp-server
+(ns cloel
   (:require [clojure.edn :as edn])
   (:import [java.net ServerSocket Socket]
            [java.io BufferedReader InputStreamReader PrintWriter]
