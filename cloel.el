@@ -208,7 +208,6 @@
             (setq connected t))
         (error
          (setq retries (1+ retries))
-         (message "Connection attempt %d failed for %s: %s" retries app-name (error-message-string err))
          (when (< retries cloel-max-retries)
            (message "Retrying in %d seconds..." cloel-retry-delay)
            (sleep-for cloel-retry-delay)))))
@@ -239,7 +238,6 @@
   (let ((process (plist-get (cloel-get-app-data app-name) :server-process)))
     (if (process-live-p process)
         (progn
-          (message "Sending to server for %s: %S" app-name message)
           (let ((encoded-message
                  (condition-case err
                      (parseedn-print-str message)
@@ -251,14 +249,12 @@
 
 (defun cloel-process-filter (proc output app-name)
   "Handle output from the Clojure server for APP-NAME."
-  (message "Raw output received for %s: %S" app-name output)
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
     (insert output))
   (let ((data (condition-case err
                   (parseedn-read-str output)
                 (error (message "Error parsing output for %s: %S" app-name err) nil))))
-    (message "Parsed data for %s: %S" app-name data)
     (when data
       (if (and (hash-table-p data) (gethash :type data))
           (cl-case (gethash :type data)
@@ -273,7 +269,6 @@
          (method (gethash :method data))
          (args (gethash :args data))
          result)
-    (message "Handling call for %s: %S" app-name data)
     (condition-case err
         (setq result
               (cond
@@ -288,7 +283,6 @@
                ((eq method :get-var) (symbol-value (intern (car args))))
                (t (error "Unknown method: %s" method))))
       (error (setq result (cons 'error (error-message-string err)))))
-    (message "Call result for %s: %S" app-name result)
     (let ((response (make-hash-table :test 'equal)))
       (puthash :type :return response)
       (puthash :id id response)
@@ -296,7 +290,6 @@
                           (format "%s" (cdr result))
                         result)
                response)
-      (message "Sending response for %s: %S" app-name response)
       (cloel-send-message app-name response))))
 
 (defun cloel-process-sentinel (proc event app-name)
