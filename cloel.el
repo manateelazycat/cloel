@@ -89,8 +89,83 @@
 (defvar cloel-server-process nil
   "The network process connected to the Clojure server.")
 
+(defvar cloel-clojure-process nil
+  "The Clojure server process.")
+
 (defvar cloel-receive-hook nil
   "Hook run when a message is received from the server.")
+
+(defvar cloel-max-retries 5
+  "Maximum number of connection retries.")
+
+(defvar cloel-retry-delay 1
+  "Delay in seconds between connection retries.")
+
+(defvar cloel-clojure-file
+  (expand-file-name "cloel.clj" (file-name-directory load-file-name))
+  "Path to the cloel.clj file.")
+
+(defun cloel-get-free-port ()
+  "Find a free port."
+  (let ((process (make-network-process :name "cloel-port-finder"
+                                       :service t
+                                       :host 'local
+                                       :server t)))
+    (prog1 (process-contact process :service)
+      (delete-process process))))
+
+(defun cloel-start-process ()
+  "Start the Clojure server process."
+  (let ((port (cloel-get-free-port)))
+    (unless (file-exists-p cloel-clojure-file)
+      (error "Cannot find cloel.clj at %s" cloel-clojure-file))
+    (setq cloel-clojure-process
+          (start-process "cloel-clojure-server" "*cloel-clojure-server*"
+                         "clojure" "-M" cloel-clojure-file (number-to-string port)))
+    (message "Starting Clojure server on port %d" port)
+    (set-process-sentinel cloel-clojure-process 'cloel-clojure-process-sentinel)
+    (cloel-connect-with-retry "localhost" port)))
+
+(defun cloel-stop-process ()
+  "Stop the Clojure server process and disconnect the client."
+  (when (process-live-p cloel-server-process)
+    (delete-process cloel-server-process)
+    (setq cloel-server-process nil)
+    (message "Disconnected from Clojure server"))
+  (when (process-live-p cloel-clojure-process)
+    (delete-process cloel-clojure-process)
+    (setq cloel-clojure-process nil)
+    (message "Stopped Clojure server process")))
+
+(defun cloel-restart-process ()
+  "Restart the Clojure server process."
+  (cloel-stop-process)
+  (sleep-for 1)        ; Give the system a moment to free up resources
+  (cloel-start-process))
+
+(defun cloel-clojure-process-sentinel (process event)
+  "Handle Clojure process state changes."
+  (when (memq (process-status process) '(exit signal))
+    (message "Clojure process has stopped: %s" event)
+    (setq cloel-clojure-process nil)))
+
+(defun cloel-connect-with-retry (host port)
+  "Attempt to connect to the Clojure server with retries."
+  (let ((retries 0)
+        (connected nil))
+    (while (and (not connected) (< retries cloel-max-retries))
+      (condition-case err
+          (progn
+            (cloel-connect host port)
+            (setq connected t))
+        (error
+         (setq retries (1+ retries))
+         (message "Connection attempt %d failed: %s" retries (error-message-string err))
+         (when (< retries cloel-max-retries)
+           (message "Retrying in %d seconds..." cloel-retry-delay)
+           (sleep-for cloel-retry-delay)))))
+    (unless connected
+      (error "Failed to connect after %d attempts" cloel-max-retries))))
 
 (defun cloel-connect (host port)
   "Establish a connection to a Clojure server at HOST:PORT."
@@ -106,11 +181,15 @@
       (error "Failed to connect to Clojure server at %s:%s" host port-num))))
 
 (defun cloel-disconnect ()
-  "Disconnect from the Clojure server."
+  "Disconnect from the Clojure server and stop the Clojure process."
   (when (process-live-p cloel-server-process)
     (delete-process cloel-server-process)
     (setq cloel-server-process nil)
-    (message "Disconnected from Clojure server")))
+    (message "Disconnected from Clojure server"))
+  (when (process-live-p cloel-clojure-process)
+    (delete-process cloel-clojure-process)
+    (setq cloel-clojure-process nil)
+    (message "Stopped Clojure server process")))
 
 (defun cloel-send-message (message)
   "Send MESSAGE to the connected Clojure server."
