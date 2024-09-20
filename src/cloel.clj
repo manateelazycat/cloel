@@ -90,9 +90,4 @@
           (let [client-socket (.accept server-socket)]
             (future (handle-client client-socket))))))
     (println "Waiting for client connection...")
-    (while (nil? @client-connection)
-      (Thread/sleep 100))
-    (loop []
-      (let [input (read-line)]
-        (when input
-          (recur))))))
+    ))
