@@ -279,7 +279,7 @@
                (t (error "Unknown method: %s" method))))
       (error (setq result (cons 'error (error-message-string err)))))
     (let ((response (make-hash-table :test 'equal)))
-      (puthash :type :return response)
+      (puthash :type :sync-return response)
       (puthash :id id response)
       (puthash :value (if (and (consp result) (eq (car result) 'error))
                           (format "%s" (cdr result))
@@ -297,7 +297,7 @@
   "Call Clojure function FUNC with ARGS for APP-NAME."
   (cloel-send-message app-name
                       (let ((message (make-hash-table :test 'equal)))
-                        (puthash :type :call-async message)
+                        (puthash :type :async-call message)
                         (puthash :func func message)
                         (puthash :args args message)
                         message)))

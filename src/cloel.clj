@@ -65,11 +65,11 @@
             (let [data (edn/read-string input)]
               (println "Received from client:" data)
               (cond
-                (and (map? data) (= (:type data) :return))
+                (and (map? data) (= (:type data) :sync-return))
                 (when-let [promise (.get call-results (:id data))]
                   (deliver promise (:value data)))
 
-                (and (map? data) (= (:type data) :call-async))
+                (and (map? data) (= (:type data) :async-call))
                 (handle-client-method-call data)
 
                 :else
