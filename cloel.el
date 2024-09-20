@@ -141,9 +141,8 @@
 
 (defun cloel-set-app-data (app-name key value)
   "Set KEY to VALUE for APP-NAME."
-  (let ((app-data (cloel-get-app-data app-name)))
-    (when app-data
-      (puthash app-name (plist-put app-data key value) cloel-apps))))
+  (when-let ((app-data (cloel-get-app-data app-name)))
+    (puthash app-name (plist-put app-data key value) cloel-apps)))
 
 (defun cloel-get-free-port ()
   "Find a free port."
@@ -215,22 +214,22 @@
 
 (defun cloel-connect (app-name host port)
   "Establish a connection to a Clojure server at HOST:PORT for APP-NAME."
-  (let ((port-num (if (stringp port) (string-to-number port) port)))
-    (let ((process (open-network-stream (format "cloel-%s-client" app-name)
-                                        (format "*cloel-%s-client*" app-name)
-                                        host port-num)))
-      (cloel-set-app-data app-name :server-process process)
-      (set-process-coding-system process 'utf-8 'utf-8)
-      (if (process-live-p process)
-          (progn
-            (set-process-filter process
-                                (lambda (proc output)
-                                  (cloel-process-filter proc output app-name)))
-            (set-process-sentinel process
-                                  (lambda (proc event)
-                                    (cloel-process-sentinel proc event app-name)))
-            (message "Connected to Clojure server for %s at %s:%s" app-name host port-num))
-        (error "Failed to connect to Clojure server for %s at %s:%s" app-name host port-num)))))
+  (let* ((port-num (if (stringp port) (string-to-number port) port))
+         (process (open-network-stream (format "cloel-%s-client" app-name)
+                                       (format "*cloel-%s-client*" app-name)
+                                       host port-num)))
+    (cloel-set-app-data app-name :server-process process)
+    (set-process-coding-system process 'utf-8 'utf-8)
+    (if (process-live-p process)
+        (progn
+          (set-process-filter process
+                              (lambda (proc output)
+                                (cloel-process-filter proc output app-name)))
+          (set-process-sentinel process
+                                (lambda (proc event)
+                                  (cloel-process-sentinel proc event app-name)))
+          (message "Connected to Clojure server for %s at %s:%s" app-name host port-num))
+      (error "Failed to connect to Clojure server for %s at %s:%s" app-name host port-num))))
 
 (defun cloel-send-message (app-name message)
   "Send MESSAGE to the connected Clojure server for APP-NAME."
@@ -250,16 +249,14 @@
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
     (insert output))
-  (let ((data (condition-case err
-                  (parseedn-read-str output)
-                (error (message "Error parsing output for %s: %S" app-name err) nil))))
-    (when data
-      (if (and (hash-table-p data) (gethash :type data))
-          (cl-case (gethash :type data)
-            (:call (cloel-handle-call proc data app-name))
-            (:message (message "Server for %s says: %s" app-name (gethash :content data)))
-            (t (message "Received unknown message type for %s: %s" app-name (gethash :type data))))
-        ))))
+  (when-let ((data (condition-case err
+                       (parseedn-read-str output)
+                     (error (message "Error parsing output for %s: %S" app-name err) nil))))
+    (if (and (hash-table-p data) (gethash :type data))
+        (cl-case (gethash :type data)
+          (:call (cloel-handle-call proc data app-name))
+          (:message (message "Server for %s says: %s" app-name (gethash :content data)))
+          (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
 (defun cloel-handle-call (proc data app-name)
   "Handle a call from the Clojure server for APP-NAME."
