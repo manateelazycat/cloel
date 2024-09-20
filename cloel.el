@@ -80,17 +80,12 @@
 ;;
 
 ;;; Require
-
-
-;;; Code:
 (require 'cl-lib)
 (require 'parseedn)
 
-(defvar cloel-server-process nil
-  "The network process connected to the Clojure server.")
-
-(defvar cloel-clojure-process nil
-  "The Clojure server process.")
+;;; Code:
+(defvar cloel-apps (make-hash-table :test 'equal)
+  "Hash table to store app-specific data.")
 
 (defvar cloel-receive-hook nil
   "Hook run when a message is received from the server.")
@@ -101,9 +96,57 @@
 (defvar cloel-retry-delay 1
   "Delay in seconds between connection retries.")
 
-(defvar cloel-clojure-file
-  (expand-file-name "demo/app.clj" (file-name-directory load-file-name))
-  "Path to the cloel.clj file.")
+(defun cloel-generate-app-functions (app-name)
+  "Generate app-specific functions for APP-NAME."
+  (let ((start-func-name (intern (format "cloel-%s-start-process" app-name)))
+        (stop-func-name (intern (format "cloel-%s-stop-process" app-name)))
+        (restart-func-name (intern (format "cloel-%s-restart-process" app-name)))
+        (call-clojure-func-name (intern (format "cloel-%s-call-clojure" app-name)))
+        (send-message-func-name (intern (format "cloel-%s-send-message" app-name))))
+
+    (fset start-func-name
+          `(lambda ()
+             (interactive)
+             (cloel-start-process ',app-name)))
+
+    (fset stop-func-name
+          `(lambda ()
+             (interactive)
+             (cloel-stop-process ',app-name)))
+
+    (fset restart-func-name
+          `(lambda ()
+             (interactive)
+             (cloel-restart-process ',app-name)))
+
+    (fset call-clojure-func-name
+          `(lambda (func &rest args)
+             (apply 'cloel-call-clojure ',app-name func args)))
+
+    (fset send-message-func-name
+          `(lambda (message)
+             (cloel-send-message ',app-name message)))
+
+    (list start-func-name stop-func-name restart-func-name call-clojure-func-name send-message-func-name)))
+
+(defun cloel-register-app (app-name app-file)
+  "Register an app with APP-NAME and APP-FILE."
+  (puthash app-name
+           (list :file app-file
+                 :clojure-process nil
+                 :server-process nil)
+           cloel-apps)
+  (cloel-generate-app-functions app-name))
+
+(defun cloel-get-app-data (app-name)
+  "Get the data for APP-NAME."
+  (gethash app-name cloel-apps))
+
+(defun cloel-set-app-data (app-name key value)
+  "Set KEY to VALUE for APP-NAME."
+  (let ((app-data (cloel-get-app-data app-name)))
+    (when app-data
+      (puthash app-name (plist-put app-data key value) cloel-apps))))
 
 (defun cloel-get-free-port ()
   "Find a free port."
@@ -114,123 +157,128 @@
     (prog1 (process-contact process :service)
       (delete-process process))))
 
-(defun cloel-start-process ()
-  "Start the Clojure server process."
-  (let ((port (cloel-get-free-port)))
-    (unless (file-exists-p cloel-clojure-file)
-      (error "Cannot find cloel.clj at %s" cloel-clojure-file))
-    (setq cloel-clojure-process
-          (start-process "cloel-clojure-server" "*cloel-clojure-server*"
-                         "clojure" "-M" cloel-clojure-file (number-to-string port)))
-    (message "Starting Clojure server on port %d" port)
-    (set-process-sentinel cloel-clojure-process 'cloel-clojure-process-sentinel)
-    (cloel-connect-with-retry "localhost" port)))
+(defun cloel-start-process (app-name)
+  "Start the Clojure server process for APP-NAME."
+  (let* ((app-data (cloel-get-app-data app-name))
+         (app-file (plist-get app-data :file))
+         (port (cloel-get-free-port)))
+    (unless (file-exists-p app-file)
+      (error "Cannot find app file at %s" app-file))
+    (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
+                                  (format "*cloel-%s-clojure-server*" app-name)
+                                  "clojure" "-M" app-file (number-to-string port))))
+      (cloel-set-app-data app-name :clojure-process process)
+      (message "Starting Clojure server for %s on port %d" app-name port)
+      (set-process-sentinel process
+                            (lambda (proc event)
+                              (cloel-clojure-process-sentinel proc event app-name)))
+      (cloel-connect-with-retry app-name "localhost" port))))
 
-(defun cloel-stop-process ()
-  "Stop the Clojure server process and disconnect the client."
-  (when (process-live-p cloel-server-process)
-    (delete-process cloel-server-process)
-    (setq cloel-server-process nil)
-    (message "Disconnected from Clojure server"))
-  (when (process-live-p cloel-clojure-process)
-    (delete-process cloel-clojure-process)
-    (setq cloel-clojure-process nil)
-    (message "Stopped Clojure server process")))
+(defun cloel-stop-process (app-name)
+  "Stop the Clojure server process and disconnect the client for APP-NAME."
+  (let* ((app-data (cloel-get-app-data app-name))
+         (server-process (plist-get app-data :server-process))
+         (clojure-process (plist-get app-data :clojure-process)))
+    (when (process-live-p server-process)
+      (delete-process server-process)
+      (cloel-set-app-data app-name :server-process nil)
+      (message "Disconnected from Clojure server for %s" app-name))
+    (when (process-live-p clojure-process)
+      (delete-process clojure-process)
+      (cloel-set-app-data app-name :clojure-process nil)
+      (message "Stopped Clojure server process for %s" app-name))))
 
-(defun cloel-restart-process ()
-  "Restart the Clojure server process."
-  (cloel-stop-process)
-  (sleep-for 1)        ; Give the system a moment to free up resources
-  (cloel-start-process))
+(defun cloel-restart-process (app-name)
+  "Restart the Clojure server process for APP-NAME."
+  (cloel-stop-process app-name)
+  (sleep-for 1)
+  (cloel-start-process app-name))
 
-(defun cloel-clojure-process-sentinel (process event)
-  "Handle Clojure process state changes."
+(defun cloel-clojure-process-sentinel (process event app-name)
+  "Handle Clojure process state changes for APP-NAME."
   (when (memq (process-status process) '(exit signal))
-    (message "Clojure process has stopped: %s" event)
-    (setq cloel-clojure-process nil)))
+    (message "Clojure process for %s has stopped: %s" app-name event)
+    (cloel-set-app-data app-name :clojure-process nil)))
 
-(defun cloel-connect-with-retry (host port)
-  "Attempt to connect to the Clojure server with retries."
+(defun cloel-connect-with-retry (app-name host port)
+  "Attempt to connect to the Clojure server with retries for APP-NAME."
   (let ((retries 0)
         (connected nil))
     (while (and (not connected) (< retries cloel-max-retries))
       (condition-case err
           (progn
-            (cloel-connect host port)
+            (cloel-connect app-name host port)
             (setq connected t))
         (error
          (setq retries (1+ retries))
-         (message "Connection attempt %d failed: %s" retries (error-message-string err))
+         (message "Connection attempt %d failed for %s: %s" retries app-name (error-message-string err))
          (when (< retries cloel-max-retries)
            (message "Retrying in %d seconds..." cloel-retry-delay)
            (sleep-for cloel-retry-delay)))))
     (unless connected
-      (error "Failed to connect after %d attempts" cloel-max-retries))))
+      (error "Failed to connect after %d attempts for %s" cloel-max-retries app-name))))
 
-(defun cloel-connect (host port)
-  "Establish a connection to a Clojure server at HOST:PORT."
+(defun cloel-connect (app-name host port)
+  "Establish a connection to a Clojure server at HOST:PORT for APP-NAME."
   (let ((port-num (if (stringp port) (string-to-number port) port)))
-    (setq cloel-server-process
-          (open-network-stream "cloel-client" "*cloel-client*" host port-num))
-    (set-process-coding-system cloel-server-process 'utf-8 'utf-8)
-    (if (process-live-p cloel-server-process)
+    (let ((process (open-network-stream (format "cloel-%s-client" app-name)
+                                        (format "*cloel-%s-client*" app-name)
+                                        host port-num)))
+      (cloel-set-app-data app-name :server-process process)
+      (set-process-coding-system process 'utf-8 'utf-8)
+      (if (process-live-p process)
+          (progn
+            (set-process-filter process
+                                (lambda (proc output)
+                                  (cloel-process-filter proc output app-name)))
+            (set-process-sentinel process
+                                  (lambda (proc event)
+                                    (cloel-process-sentinel proc event app-name)))
+            (message "Connected to Clojure server for %s at %s:%s" app-name host port-num))
+        (error "Failed to connect to Clojure server for %s at %s:%s" app-name host port-num)))))
+
+(defun cloel-send-message (app-name message)
+  "Send MESSAGE to the connected Clojure server for APP-NAME."
+  (let ((process (plist-get (cloel-get-app-data app-name) :server-process)))
+    (if (process-live-p process)
         (progn
-          (set-process-filter cloel-server-process 'cloel-process-filter)
-          (set-process-sentinel cloel-server-process 'cloel-process-sentinel)
-          (message "Connected to Clojure server at %s:%s" host port-num))
-      (error "Failed to connect to Clojure server at %s:%s" host port-num))))
+          (message "Sending to server for %s: %S" app-name message)
+          (let ((encoded-message
+                 (condition-case err
+                     (parseedn-print-str message)
+                   (error
+                    (message "Error encoding message: %S" err)
+                    (prin1-to-string message)))))
+            (process-send-string process (concat encoded-message "\n"))))
+      (error "Not connected to Clojure server for %s" app-name))))
 
-(defun cloel-disconnect ()
-  "Disconnect from the Clojure server and stop the Clojure process."
-  (when (process-live-p cloel-server-process)
-    (delete-process cloel-server-process)
-    (setq cloel-server-process nil)
-    (message "Disconnected from Clojure server"))
-  (when (process-live-p cloel-clojure-process)
-    (delete-process cloel-clojure-process)
-    (setq cloel-clojure-process nil)
-    (message "Stopped Clojure server process")))
-
-(defun cloel-send-message (message)
-  "Send MESSAGE to the connected Clojure server."
-  (if (process-live-p cloel-server-process)
-      (progn
-        (message "Sending to server: %S" message) ; Debug print
-        (let ((encoded-message
-               (condition-case err
-                   (parseedn-print-str message)
-                 (error
-                  (message "Error encoding message: %S" err)
-                  (prin1-to-string message)))))
-          (process-send-string cloel-server-process (concat encoded-message "\n"))))
-    (error "Not connected to Clojure server")))
-
-(defun cloel-process-filter (proc output)
-  "Handle output from the Clojure server."
-  (message "Raw output received: %S" output) ; Debug print
+(defun cloel-process-filter (proc output app-name)
+  "Handle output from the Clojure server for APP-NAME."
+  (message "Raw output received for %s: %S" app-name output)
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
     (insert output))
   (let ((data (condition-case err
                   (parseedn-read-str output)
-                (error (message "Error parsing output: %S" err) nil))))
-    (message "Parsed data: %S" data)    ; Debug print
+                (error (message "Error parsing output for %s: %S" app-name err) nil))))
+    (message "Parsed data for %s: %S" app-name data)
     (when data
       (if (and (hash-table-p data) (gethash :type data))
           (cl-case (gethash :type data)
-            (:call (cloel-handle-call proc data))
-            (:message (message "Server says: %s" (gethash :content data)))
-            (t (message "Received unknown message type: %s" (gethash :type data))))
+            (:call (cloel-handle-call proc data app-name))
+            (:message (message "Server for %s says: %s" app-name (gethash :content data)))
+            (t (message "Received unknown message type for %s: %s" app-name (gethash :type data))))
         (progn
-          (message "Received from server: %s" (if (stringp data) (string-trim data) data))
-          (run-hook-with-args 'cloel-receive-hook output))))))
+          (message "Received from server for %s: %s" app-name (if (stringp data) (string-trim data) data))
+          (run-hook-with-args 'cloel-receive-hook output app-name))))))
 
-(defun cloel-handle-call (proc data)
+(defun cloel-handle-call (proc data app-name)
+  "Handle a call from the Clojure server for APP-NAME."
   (let* ((id (gethash :id data))
          (method (gethash :method data))
          (args (gethash :args data))
          result)
-    (message "Handling call: %S" data)  ; Debug print
+    (message "Handling call for %s: %S" app-name data)
     (condition-case err
         (setq result
               (cond
@@ -245,7 +293,7 @@
                ((eq method :get-var) (symbol-value (intern (car args))))
                (t (error "Unknown method: %s" method))))
       (error (setq result (cons 'error (error-message-string err)))))
-    (message "Call result: %S" result)  ; Debug print
+    (message "Call result for %s: %S" app-name result)
     (let ((response (make-hash-table :test 'equal)))
       (puthash :type :return response)
       (puthash :id id response)
@@ -253,14 +301,23 @@
                           (format "%s" (cdr result))
                         result)
                response)
-      (message "Sending response: %S" response) ; Debug print
-      (cloel-send-message response))))
+      (message "Sending response for %s: %S" app-name response)
+      (cloel-send-message app-name response))))
 
-(defun cloel-process-sentinel (proc event)
-  "Monitor the network connection."
+(defun cloel-process-sentinel (proc event app-name)
+  "Monitor the network connection for APP-NAME."
   (when (string-match "\\(closed\\|connection broken by remote peer\\)" event)
-    (message "Connection to server was closed")
-    (setq cloel-server-process nil)))
+    (message "Connection to server for %s was closed" app-name)
+    (cloel-set-app-data app-name :server-process nil)))
+
+(defun cloel-call-clojure (app-name func &rest args)
+  "Call Clojure function FUNC with ARGS for APP-NAME."
+  (cloel-send-message app-name
+                      (let ((message (make-hash-table :test 'equal)))
+                        (puthash :type :clojure-call message)
+                        (puthash :func func message)
+                        (puthash :args args message)
+                        message)))
 
 (defun cloel-add-receive-hook (func)
   "Add a function to be called when a message is received."
@@ -270,17 +327,10 @@
   "Remove a function from the receive hook."
   (remove-hook 'cloel-receive-hook func))
 
-(defun cloel-call-clojure (func &rest args)
-  "Call Clojure function FUNC with ARGS."
-  (cloel-send-message
-   (let ((message (make-hash-table :test 'equal)))
-     (puthash :type :clojure-call message)
-     (puthash :func func message)
-     (puthash :args args message)
-     message)))
+(defun my-message-handler (message app-name)
+  "Custom handler for messages received from APP-NAME."
+  (message "Custom handler received from %s: %s" app-name message))
 
-(defun my-message-handler (message)
-  (message "Custom handler received: %s" message))
 (cloel-add-receive-hook 'my-message-handler)
 
 (provide 'cloel)
