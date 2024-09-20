@@ -4,8 +4,16 @@
 
 (cloel-register-app "demo" cloel-demo-clj-file)
 
-;; (cloel-demo-start-process)
-;; (cloel-demo-stop-process)
-;; (cloel-demo-restart-process)
-;; (cloel-demo-call-clojure "clojure.core/+" 1 2 3)
-;; (cloel-demo-send-message "hello")
+(defun cloel-demo-test ()
+  (interactive)
+  ;; STEP 1: Start Clojure process with localhost and free port.
+  (cloel-demo-start-process))
+
+(defun cloel-demo-start-process-confirm (client-id)
+  ;; STEP 3: Send "Hello" message to Clojure process ASYNC.
+  (message "Start process confirm: %s" client-id)
+  (cloel-demo-send-message "Hello"))
+
+(defun cloel-demo-hello-confirm ()
+  ;; STEP 8: Call Clojure method "app-success" ASYNC.
+  (cloel-demo-call-clojure "app-success" "Cloel rocks!"))

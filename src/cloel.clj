@@ -58,12 +58,15 @@
 (defn ^:dynamic handle-client-message [data]
   (println "Received message:" data))
 
+(defn ^:dynamic handle-client-connected [client-id]
+  (println "Client connected:" client-id))
+
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
         reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket)))
         writer (PrintWriter. (.getOutputStream client-socket))]
     (reset! client-connection {:socket client-socket :reader reader :writer writer})
-    (println "Client connected:" client-id)
+    (handle-client-connected client-id)
     (try
       (while true
         (let [input (.readLine reader)]
