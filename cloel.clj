@@ -47,7 +47,7 @@
 (defn elisp-get-var [var-name]
   (elisp-call :get-var var-name))
 
-(defn handle-clojure-call [data]
+(defn ^:dynamic handle-clojure-call [data]
   (let [{:keys [func args]} data]
     (future
       (try
