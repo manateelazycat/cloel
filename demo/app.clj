@@ -12,9 +12,7 @@
   (let [{:keys [func args]} data]
     (future
       (try
-        (println "Executing Clojure function:" func "with args:" args)
-        (let [result (apply (resolve (symbol func)) args)]
-          (println "Clojure APP function result:" result))
+        (apply (resolve (symbol func)) args)
         (catch Exception e
           (println "Error in Clojure call:" (.getMessage e)))))))
 
@@ -25,7 +23,7 @@
       ;; STEP 5: Call Elisp method result SYNC.
       (println "Sync Result of (+ 2 3):" (cloel/elisp-eval-sync "+" 2 3))
       ;; STEP 6: Get Elisp variable SYNC.
-      (println "Value of user-full-name:" (cloel/elisp-get-var "user-full-name"))
+      (println "Value of 'user-full-name' is:" (cloel/elisp-get-var "user-full-name"))
       ;; STEP 7: Call Elisp method "cloel-demo-hello-confirm" ASYNC.
       (cloel/elisp-eval-async "cloel-demo-hello-confirm")
       )))

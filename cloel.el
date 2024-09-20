@@ -209,7 +209,6 @@
         (error
          (setq retries (1+ retries))
          (when (< retries cloel-max-retries)
-           (message "Retrying in %d seconds..." cloel-retry-delay)
            (sleep-for cloel-retry-delay)))))
     (unless connected
       (error "Failed to connect after %d attempts for %s" cloel-max-retries app-name))))

@@ -10,7 +10,6 @@
 
 (defn send-to-client [message]
   (when-let [writer (:writer @client-connection)]
-    (println "Sending to client:" message)  ; Debug print
     (.println writer (pr-str message))
     (.flush writer)))
 
@@ -21,16 +20,13 @@
   (let [id (generate-call-id)
         promise (promise)]
     (.put call-results id promise)
-    (println "Calling Elisp method:" method "with args:" args "and id:" id)  ; Debug print
     (send-to-client {:type :call :id id :method method :args args})
     (let [result (deref promise 60000 :timeout)]  ; 60 second timeout
       (.remove call-results id)
       (if (= result :timeout)
         (do
-          (println "Timeout waiting for Elisp response for id:" id)  ; Debug print
           (throw (Exception. (str "Timeout waiting for Elisp response for id: " id))))
         (do
-          (println "Received result for id:" id ":" result)  ; Debug print
           result)))))
 
 (defn elisp-eval-sync [func & args]
@@ -38,7 +34,6 @@
 
 (defn elisp-eval-async [func & args]
   (let [id (generate-call-id)]
-    (println "Async calling Elisp function:" func "with args:" args "and id:" id)  ; Debug print
     (send-to-client {:type :call :id id :method :eval-async :func func :args args})
     (future
       (let [result (apply elisp-call :eval-async func args)]
