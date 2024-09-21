@@ -8,14 +8,6 @@
 (defn app-handle-client-connected [client-id]
   (app-start-process-confirm client-id))
 
-(defn app-handle-client-async-call [data]
-  (let [{:keys [func args]} data]
-    (future
-      (try
-        (apply (resolve (symbol func)) args)
-        (catch Exception e
-          (println "Error in Clojure call:" (.getMessage e)))))))
-
 (defn app-handle-client-message [data]
   (when (= data "Hello")
     ;; STEP 4: Handle Emacs message in Clojure sub-thread.
@@ -32,7 +24,6 @@
   ;; STEP 10: Send message to Emacs ASYNC.
   (cloel/elisp-show-message message))
 
-(alter-var-root #'cloel/handle-client-async-call (constantly app-handle-client-async-call))
 (alter-var-root #'cloel/handle-client-message (constantly app-handle-client-message))
 (alter-var-root #'cloel/handle-client-connected (constantly app-handle-client-connected))
 
