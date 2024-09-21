@@ -53,8 +53,8 @@ Clojure API:
 - `cloel/start-server`: 启动 Clojure 进程
 - `alter-var-root`: 在应用端重载 Cloel 核心的回调处理函数， 具体请看 `demo/app.clj`
 - `cloel/elisp-show-message`: Clojure 异步在 minibuffer 显示消息
+- `cloel/elisp-get-var`: Clojure 同步获取 Elisp 变量值
 - `cloel/elisp-eval-async`: Clojure 异步调用 Elisp 函数
 - `cloel/elisp-eval-sync`: Clojure 同步调用 Elisp 函数
-- `cloel/elisp-get-var`: Clojure 同步获取 Elisp 变量值
 
 开发时可通过 grep "STEP" 关键字来理解 Demo 程序结构。 

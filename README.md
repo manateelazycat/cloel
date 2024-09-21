@@ -53,8 +53,8 @@ Clojure API:
 - `cloel/start-server`: Start Clojure process
 - `alter-var-root`: Reload Cloel core callback handling functions on the application side, see `demo/app.clj` for details
 - `cloel/elisp-show-message`: Clojure asynchronously show message in minibuffer
+- `cloel/elisp-get-var`: Clojure synchronously gets Elisp variable values
 - `cloel/elisp-eval-async`: Clojure asynchronously calls Elisp functions
 - `cloel/elisp-eval-sync`: Clojure synchronously calls Elisp functions
-- `cloel/elisp-get-var`: Clojure synchronously gets Elisp variable values
 
 During development, you can use grep for the "STEP" keyword to understand the Demo program structure.
