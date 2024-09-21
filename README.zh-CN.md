@@ -44,6 +44,7 @@ Elisp API:
 - `cloel-app-start/stop/restart-process`: 管理 Clojure 进程
 - `cloel-app-send-message`: Elisp 异步发送消息给 Clojure 
 - `cloel-app-call-async`: Elisp 异步调用 Clojure 函数
+- `cloel-app-call-sync`: Elisp 同步调用 Clojure 函数
 
 Clojure API:
 - `cloel/start-server`: 启动 Clojure 进程

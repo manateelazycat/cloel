@@ -41,7 +41,7 @@
 (defn ^:export elisp-get-var [var-name]
   (elisp-call :get-var var-name))
 
-(defn ^:dynamic handle-client-method-call [data]
+(defn ^:dynamic handle-client-async-call [data]
   (let [{:keys [func args]} data]
     (println "Executing Clojure function:" func "with args:" args)))
 
@@ -50,6 +50,17 @@
 
 (defn ^:dynamic handle-client-connected [client-id]
   (println "Client connected:" client-id))
+
+(defn ^:dynamic handle-client-sync-call [data]
+  (future
+    (let [{:keys [id func args]} data
+         result (try
+                  {:value (apply (resolve (symbol func)) args)}
+                  (catch Exception e
+                    {:error (.getMessage e)}))]
+     (send-to-client {:type :sync-return
+                      :id id
+                      :result result}))))
 
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
@@ -68,7 +79,10 @@
                 (deliver promise (:value data)))
 
               (and (map? data) (= (:type data) :async-call))
-              (handle-client-method-call data)
+              (handle-client-async-call data)
+
+              (and (map? data) (= (:type data) :sync-call))
+              (handle-client-sync-call data)
 
               :else
               (handle-client-message data))

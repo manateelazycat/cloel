@@ -15,5 +15,7 @@
   (cloel-demo-send-message "Hello"))
 
 (defun cloel-demo-hello-confirm ()
-  ;; STEP 8: Call Clojure method "app-success" ASYNC.
+  ;; STEP 8: Call Clojure method "clojure.core/+" SYNC.
+  (message "Got sync result of (+ 1 2 3): %s" (cloel-demo-call-sync "clojure.core/+" 1 2 3))
+  ;; STEP 9: Call Clojure method "app-success" ASYNC.
   (cloel-demo-call-async "app-success" "Cloel rocks!"))

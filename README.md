@@ -44,6 +44,7 @@ Elisp API:
 - `cloel-app-start/stop/restart-process`: Manage Clojure processes
 - `cloel-app-send-message`: Elisp asynchronously sends messages to Clojure
 - `cloel-app-call-async`: Elisp asynchronously calls Clojure functions
+- `cloel-app-call-sync`: Elisp synchronously calls Clojure functions
 
 Clojure API:
 - `cloel/start-server`: Start Clojure process

@@ -8,7 +8,7 @@
 (defn app-handle-client-connected [client-id]
   (app-start-process-confirm client-id))
 
-(defn app-handle-client-method-call [data]
+(defn app-handle-client-async-call [data]
   (let [{:keys [func args]} data]
     (future
       (try
@@ -29,10 +29,10 @@
       )))
 
 (defn app-success [message]
-  ;; STEP 9: Send message to Emacs ASYNC.
+  ;; STEP 10: Send message to Emacs ASYNC.
   (cloel/elisp-show-message message))
 
-(alter-var-root #'cloel/handle-client-method-call (constantly app-handle-client-method-call))
+(alter-var-root #'cloel/handle-client-async-call (constantly app-handle-client-async-call))
 (alter-var-root #'cloel/handle-client-message (constantly app-handle-client-message))
 (alter-var-root #'cloel/handle-client-connected (constantly app-handle-client-connected))
 

@@ -93,12 +93,16 @@
 (defvar cloel-retry-delay 1
   "Delay in seconds between connection retries.")
 
+(defvar cloel-sync-call-results (make-hash-table :test 'equal)
+  "Hash table to store sync call results.")
+
 (defun cloel-generate-app-functions (app-name)
   "Generate app-specific functions for APP-NAME."
   (let ((start-func-name (intern (format "cloel-%s-start-process" app-name)))
         (stop-func-name (intern (format "cloel-%s-stop-process" app-name)))
         (restart-func-name (intern (format "cloel-%s-restart-process" app-name)))
         (call-async-func-name (intern (format "cloel-%s-call-async" app-name)))
+        (call-sync-func-name (intern (format "cloel-%s-call-sync" app-name)))
         (send-message-func-name (intern (format "cloel-%s-send-message" app-name))))
 
     (fset start-func-name
@@ -120,11 +124,15 @@
           `(lambda (func &rest args)
              (apply 'cloel-call-async ',app-name func args)))
 
+    (fset call-sync-func-name
+          `(lambda (func &rest args)
+             (apply 'cloel-call-sync ',app-name func args)))
+
     (fset send-message-func-name
           `(lambda (message)
              (cloel-send-message ',app-name message)))
 
-    (list start-func-name stop-func-name restart-func-name call-async-func-name send-message-func-name)))
+    (list start-func-name stop-func-name restart-func-name call-async-func-name call-sync-func-name send-message-func-name)))
 
 (defun cloel-register-app (app-name app-file)
   "Register an app with APP-NAME and APP-FILE."
@@ -255,6 +263,7 @@
     (if (and (hash-table-p data) (gethash :type data))
         (cl-case (gethash :type data)
           (:call (cloel-handle-call proc data app-name))
+          (:sync-return (cloel-handle-sync-return data))
           (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
 (defun cloel-handle-call (proc data app-name)
@@ -282,6 +291,15 @@
                response)
       (cloel-send-message app-name response))))
 
+(defun cloel-handle-sync-return (data)
+  "Handle synchronous call return from Clojure server."
+  (let* ((call-id (gethash :id data))
+         (result (gethash :result data))
+         (result-promise (gethash call-id cloel-sync-call-results)))
+    (when result-promise
+      (puthash :result result result-promise)
+      (remhash call-id cloel-sync-call-results))))
+
 (defun cloel-tcp-connection-sentinel (proc event app-name)
   "Monitor the network connection for APP-NAME."
   (when (string-match "\\(closed\\|connection broken by remote peer\\)" event)
@@ -296,6 +314,36 @@
                         (puthash :func func message)
                         (puthash :args args message)
                         message)))
+
+(defun cloel-call-sync (app-name func &rest args)
+  "Synchronously call Clojure function FUNC with ARGS for APP-NAME and return the result."
+  (let* ((call-id (format "%s-%s" app-name (cl-gensym)))
+         (result-promise (make-hash-table :test 'equal))
+         (start-time (current-time))
+         result)
+    (puthash call-id result-promise cloel-sync-call-results)
+    (cloel-send-message app-name
+                        (let ((message (make-hash-table :test 'equal)))
+                          (puthash :type :sync-call message)
+                          (puthash :id call-id message)
+                          (puthash :func func message)
+                          (puthash :args args message)
+                          message))
+    (cl-loop with wait-time = 0.001
+             for elapsed = (float-time (time-subtract (current-time) start-time))
+             do (setq result (gethash :result result-promise))
+             until result
+             when (> elapsed 60) do (error "Timeout waiting for sync call result")
+             do (sleep-for wait-time)
+             do (setq wait-time (min (* wait-time 1.5) 0.1)))
+    (remhash call-id cloel-sync-call-results)
+    (let ((return-value
+           (if (hash-table-p result)
+               (if (gethash :error result)
+                   (error "Clojure error: %s" (gethash :error result))
+                 (gethash :value result))
+             (error "Unexpected result format: %S" result))))
+      return-value)))
 
 (provide 'cloel)
 ;;; cloel.el ends here
