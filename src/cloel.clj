@@ -20,7 +20,7 @@
   (let [id (generate-call-id)
         promise (promise)]
     (.put call-results id promise)
-    (send-to-client {:type :eval-sync :id id :method method :args args})
+    (send-to-client {:type :eval-elisp-sync :id id :method method :args args})
     (let [result (deref promise 60000 :timeout)]
       (.remove call-results id)
       (if (= result :timeout)
@@ -31,7 +31,7 @@
   (elisp-call :eval func args))
 
 (defn ^:export elisp-eval-async [func & args]
-  (send-to-client {:type :async-eval :func func :args args}))
+  (send-to-client {:type :eval-elisp-async :func func :args args}))
 
 (defn ^:export elisp-show-message [& args]
   (let [message (apply str args)]
@@ -81,10 +81,10 @@
               (when-let [promise (.get call-results (:id data))]
                 (deliver promise (:value data)))
 
-              (and (map? data) (= (:type data) :async-call))
+              (and (map? data) (= (:type data) :call-clojure-async))
               (handle-client-async-call data)
 
-              (and (map? data) (= (:type data) :sync-call))
+              (and (map? data) (= (:type data) :call-clojure-sync))
               (handle-client-sync-call data)
 
               :else

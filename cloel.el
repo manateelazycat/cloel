@@ -262,9 +262,9 @@
                      (error (message "Error parsing output for %s: %S" app-name err) nil))))
     (if (and (hash-table-p data) (gethash :type data))
         (cl-case (gethash :type data)
-          (:eval-sync (cloel-handle-sync-eval proc data app-name))
+          (:eval-elisp-sync (cloel-handle-sync-eval proc data app-name))
+          (:eval-elisp-async (cloel-handle-async-eval data app-name))
           (:sync-return (cloel-handle-sync-return data))
-          (:async-eval (cloel-handle-async-eval data app-name))
           (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
 (defun cloel-handle-sync-eval (proc data app-name)
@@ -321,7 +321,7 @@
   "Call Clojure function FUNC with ARGS for APP-NAME."
   (cloel-send-message app-name
                       (let ((message (make-hash-table :test 'equal)))
-                        (puthash :type :async-call message)
+                        (puthash :type :call-clojure-async message)
                         (puthash :func func message)
                         (puthash :args args message)
                         message)))
@@ -335,7 +335,7 @@
     (puthash call-id result-promise cloel-sync-call-results)
     (cloel-send-message app-name
                         (let ((message (make-hash-table :test 'equal)))
-                          (puthash :type :sync-call message)
+                          (puthash :type :call-clojure-sync message)
                           (puthash :id call-id message)
                           (puthash :func func message)
                           (puthash :args args message)
