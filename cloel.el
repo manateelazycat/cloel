@@ -262,12 +262,12 @@
                      (error (message "Error parsing output for %s: %S" app-name err) nil))))
     (if (and (hash-table-p data) (gethash :type data))
         (cl-case (gethash :type data)
-          (:eval-elisp-sync (cloel-handle-sync-eval proc data app-name))
-          (:eval-elisp-async (cloel-handle-async-eval data app-name))
-          (:sync-return (cloel-handle-sync-return data))
+          (:call-elisp-sync (cloel-handle-sync-call proc data app-name))
+          (:call-elisp-async (cloel-handle-async-call data app-name))
+          (:clojure-sync-return (cloel-handle-sync-return data))
           (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
-(defun cloel-handle-sync-eval (proc data app-name)
+(defun cloel-handle-sync-call (proc data app-name)
   "Handle a call from the Clojure server for APP-NAME."
   (let* ((id (gethash :id data))
          (method (gethash :method data))
@@ -276,15 +276,15 @@
     (condition-case err
         (setq result
               (cond
-               ((eq method :eval)
+               ((eq method :get-func-result)
                 (if (and (stringp (car args)) (fboundp (intern (car args))))
                     (apply (intern (car args)) (car (cdr args)))
                   (error "Invalid function or arguments")))
-               ((eq method :get-var) (symbol-value (intern (car args))))
+               ((eq method :get-var-result) (symbol-value (intern (car args))))
                (t (error "Unknown method: %s" method))))
       (error (setq result (cons 'error (error-message-string err)))))
     (let ((response (make-hash-table :test 'equal)))
-      (puthash :type :sync-return response)
+      (puthash :type :elisp-sync-return response)
       (puthash :id id response)
       (puthash :value (if (and (consp result) (eq (car result) 'error))
                           (format "%s" (cdr result))
@@ -301,7 +301,7 @@
       (puthash :result result result-promise)
       (remhash call-id cloel-sync-call-results))))
 
-(defun cloel-handle-async-eval (data app-name)
+(defun cloel-handle-async-call (data app-name)
   "Handle asynchronous evaluation request from Clojure."
   (let ((func (gethash :func data))
         (args (gethash :args data)))

@@ -20,7 +20,7 @@
   (let [id (generate-call-id)
         promise (promise)]
     (.put call-results id promise)
-    (send-to-client {:type :eval-elisp-sync :id id :method method :args args})
+    (send-to-client {:type :call-elisp-sync :id id :method method :args args})
     (let [result (deref promise 60000 :timeout)]
       (.remove call-results id)
       (if (= result :timeout)
@@ -28,17 +28,17 @@
         result))))
 
 (defn ^:export elisp-eval-sync [func & args]
-  (elisp-call :eval func args))
+  (elisp-call :get-func-result func args))
 
 (defn ^:export elisp-eval-async [func & args]
-  (send-to-client {:type :eval-elisp-async :func func :args args}))
+  (send-to-client {:type :call-elisp-async :func func :args args}))
 
 (defn ^:export elisp-show-message [& args]
   (let [message (apply str args)]
     (elisp-eval-async "message" message)))
 
 (defn ^:export elisp-get-var [var-name]
-  (elisp-call :get-var var-name))
+  (elisp-call :get-var-result var-name))
 
 (defn ^:dynamic handle-client-async-call [data]
   (future
@@ -55,7 +55,7 @@
                   {:value (apply (resolve (symbol func)) args)}
                   (catch Exception e
                     {:error (.getMessage e)}))]
-     (send-to-client {:type :sync-return
+     (send-to-client {:type :clojure-sync-return
                       :id id
                       :result result}))))
 
@@ -77,7 +77,7 @@
           (let [data (edn/read-string input)]
             (println "Received from client:" data)
             (cond
-              (and (map? data) (= (:type data) :sync-return))
+              (and (map? data) (= (:type data) :elisp-sync-return))
               (when-let [promise (.get call-results (:id data))]
                 (deliver promise (:value data)))
 
