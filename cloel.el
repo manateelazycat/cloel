@@ -178,7 +178,7 @@
     (when (process-live-p tcp-channel)
       (delete-process tcp-channel)
       (cloel-set-app-data app-name :tcp-channel nil)
-      (message "Disconnected from Clojure server for %s" app-name))
+      (message "Disconnected Clojure TCP connection for %s" app-name))
     (when (process-live-p server-process)
       (delete-process server-process)
       (cloel-set-app-data app-name :server-process nil)
@@ -193,7 +193,7 @@
 (defun cloel-server-process-sentinel (process event app-name)
   "Handle Clojure process state changes for APP-NAME."
   (when (memq (process-status process) '(exit signal))
-    (message "Clojure process for %s has stopped: %s" app-name event)
+    (message "Clojure server process for %s has stopped: %s" app-name event)
     (cloel-set-app-data app-name :server-process nil)))
 
 (defun cloel-connect-with-retry (app-name host port)
@@ -224,12 +224,12 @@
         (progn
           (set-process-filter channel
                               (lambda (proc output)
-                                (cloel-process-filter proc output app-name)))
+                                (cloel-tcp-connection-filter proc output app-name)))
           (set-process-sentinel channel
                                 (lambda (proc event)
-                                  (cloel-process-sentinel proc event app-name)))
-          (message "Connected to Clojure server for %s at %s:%s" app-name host port-num))
-      (error "Failed to connect to Clojure server for %s at %s:%s" app-name host port-num))))
+                                  (cloel-tcp-connection-sentinel proc event app-name)))
+          (message "TCP connected for %s at %s:%s" app-name host port-num))
+      (error "Failed to TCP connect for %s at %s:%s" app-name host port-num))))
 
 (defun cloel-send-message (app-name message)
   "Send MESSAGE to the connected Clojure server for APP-NAME."
@@ -244,7 +244,7 @@
           (process-send-string channel (concat encoded-message "\n")))
       (error "Not connected to Clojure server for %s" app-name))))
 
-(defun cloel-process-filter (proc output app-name)
+(defun cloel-tcp-connection-filter (proc output app-name)
   "Handle output from the Clojure server for APP-NAME."
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
@@ -255,7 +255,6 @@
     (if (and (hash-table-p data) (gethash :type data))
         (cl-case (gethash :type data)
           (:call (cloel-handle-call proc data app-name))
-          (:message (message "Server for %s says: %s" app-name (gethash :content data)))
           (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
 (defun cloel-handle-call (proc data app-name)
@@ -283,10 +282,10 @@
                response)
       (cloel-send-message app-name response))))
 
-(defun cloel-process-sentinel (proc event app-name)
+(defun cloel-tcp-connection-sentinel (proc event app-name)
   "Monitor the network connection for APP-NAME."
   (when (string-match "\\(closed\\|connection broken by remote peer\\)" event)
-    (message "Connection to server for %s was closed" app-name)
+    (message "TCP connection to server for %s was closed" app-name)
     (cloel-set-app-data app-name :tcp-channel nil)))
 
 (defun cloel-call-async (app-name func &rest args)
