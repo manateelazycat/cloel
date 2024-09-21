@@ -40,7 +40,9 @@ Cloel 是一个结合 Clojure 和 Elisp 的协同编程框架， 利用 Clojure 
 每次更新 Cloel 后都需要执行 `clojure -X:jar; clojure -X:install` 来更新 Clojure 代码， 避免版本升级后的兼容性问题。
 
 ## 开发
-主要 API, 将 `app` 替换为你的应用名:
+开发时可通过 grep "STEP" 关键字来理解 Demo 程序结构。 
+
+以下是 API 详情, 将 `app` 替换为你的应用名:
 
 Elisp API:
 - `cloel-register-app`: 注册应用, 需要输入应用名和 Clojure 代码的路径， 应用名以 `app` 为例
@@ -51,10 +53,17 @@ Elisp API:
 
 Clojure API:
 - `cloel/start-server`: 启动 Clojure 进程
-- `alter-var-root`: 在应用端重载 Cloel 核心的回调处理函数， 具体请看 `demo/app.clj`
 - `cloel/elisp-show-message`: Clojure 异步在 minibuffer 显示消息
 - `cloel/elisp-get-var`: Clojure 同步获取 Elisp 变量值
 - `cloel/elisp-eval-async`: Clojure 异步调用 Elisp 函数
 - `cloel/elisp-eval-sync`: Clojure 同步调用 Elisp 函数
 
-开发时可通过 grep "STEP" 关键字来理解 Demo 程序结构。 
+Clojure 可以被重载的接口：
+- `handle-client-async-call`: 处理 Elisp 异步调用 Clojure 函数的接口
+- `handle-client-sync-call`: 处理 Elisp 同步调用 Clojure 函数的接口
+- `handle-client-message`: 处理 Elisp 异步发送消息给 Clojure 的接口
+- `handle-client-connected`: Client 连接上 Clojure 进程时的接口
+
+在 Clojure 中， 我们可以使用 `alter-var-root` 在应用端重载上面的接口实现， 具体请看 `demo/app.clj`
+
+
