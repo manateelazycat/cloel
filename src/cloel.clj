@@ -20,7 +20,7 @@
   (let [id (generate-call-id)
         promise (promise)]
     (.put call-results id promise)
-    (send-to-client {:type :call :id id :method method :args args})
+    (send-to-client {:type :eval-sync :id id :method method :args args})
     (let [result (deref promise 60000 :timeout)]
       (.remove call-results id)
       (if (= result :timeout)
@@ -31,8 +31,7 @@
   (elisp-call :eval func args))
 
 (defn ^:export elisp-eval-async [func & args]
-  (future
-    (elisp-call :eval func args)))
+  (send-to-client {:type :async-eval :func func :args args}))
 
 (defn ^:export elisp-show-message [& args]
   (let [message (apply str args)]

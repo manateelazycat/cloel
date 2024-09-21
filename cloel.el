@@ -262,11 +262,12 @@
                      (error (message "Error parsing output for %s: %S" app-name err) nil))))
     (if (and (hash-table-p data) (gethash :type data))
         (cl-case (gethash :type data)
-          (:call (cloel-handle-call proc data app-name))
+          (:eval-sync (cloel-handle-sync-eval proc data app-name))
           (:sync-return (cloel-handle-sync-return data))
+          (:async-eval (cloel-handle-async-eval data app-name))
           (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
-(defun cloel-handle-call (proc data app-name)
+(defun cloel-handle-sync-eval (proc data app-name)
   "Handle a call from the Clojure server for APP-NAME."
   (let* ((id (gethash :id data))
          (method (gethash :method data))
@@ -299,6 +300,16 @@
     (when result-promise
       (puthash :result result result-promise)
       (remhash call-id cloel-sync-call-results))))
+
+(defun cloel-handle-async-eval (data app-name)
+  "Handle asynchronous evaluation request from Clojure."
+  (let ((func (gethash :func data))
+        (args (gethash :args data)))
+    (condition-case err
+        (if (and (stringp func) (fboundp (intern func)))
+            (apply (intern func) args)
+          (error "Invalid function or arguments"))
+      (error (message "Error in async eval for %s: %s" app-name (error-message-string err))))))
 
 (defun cloel-tcp-connection-sentinel (proc event app-name)
   "Monitor the network connection for APP-NAME."
