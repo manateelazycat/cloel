@@ -35,6 +35,9 @@ Cloel 是一个结合 Clojure 和 Elisp 的协同编程框架， 利用 Clojure 
    - 执行 `M-x load-file` 选择 `cloel/demo/app.el`
    - 执行 `M-x cloel-demo-test`
    - 如果显示 "Cloel rocks!" 则安装成功, 没有成功请查看 `*cloel-demo-clojure-server*` buffer 以反馈报错信息
+   
+## 版本更新   
+每次更新 Cloel 后都需要执行 `clojure -X:jar; clojure -X:install` 来更新 Clojure 代码， 避免版本升级后的兼容性问题。
 
 ## 开发
 主要 API, 将 `app` 替换为你的应用名:

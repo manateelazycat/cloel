@@ -36,6 +36,9 @@ Key advantages:
    - Run `M-x cloel-demo-test`
    - If "Cloel rocks!" is displayed, installation is successful. If not, check the `*cloel-demo-clojure-server*` buffer for error messages
 
+## Version Update
+After each update of Cloel, you need to execute `clojure -X:jar; clojure -X:install` to update the Clojure code. 
+
 ## Development
 Main APIs, replace `app` with your application name:
 
