@@ -169,22 +169,17 @@
   "Start the Clojure server process for APP-NAME."
   (let* ((app-data (cloel-get-app-data app-name))
          (app-file (plist-get app-data :file))
+         (default-directory (file-name-directory app-file))
+         (app-file (file-name-nondirectory app-file))
          (app-dir (file-name-directory app-file))
-         (deps-file (expand-file-name "deps.edn" app-dir))
-         (deps-content (with-temp-buffer
-                         (insert-file-contents deps-file)
-                         (buffer-string)))
-         (escaped-deps-content (cloel-escape-string-for-shell deps-content))
          (port (cloel-get-free-port)))
     (unless (file-exists-p app-file)
       (error "Cannot find app file at %s" app-file))
-    (message "Deps content: %s" deps-content)
     (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                   (format "*cloel-%s-clojure-server*" app-name)
                                   "sh"
                                   "-c"
-                                  (format "clojure -Sdeps '%s' -M %s %d"
-                                          escaped-deps-content
+                                  (format "clojure -M %s %d"
                                           app-file
                                           port))))
       (cloel-set-app-data app-name :server-process process)
