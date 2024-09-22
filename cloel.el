@@ -188,7 +188,7 @@
                                           app-file
                                           port))))
       (cloel-set-app-data app-name :server-process process)
-      (message "Starting Clojure server for %s on port" app-name port)
+      (message "Starting Clojure server for %s on port %d" app-name port)
       (set-process-sentinel process
                             (lambda (proc event)
                               (cloel-server-process-sentinel proc event app-name)))
@@ -199,11 +199,11 @@
   (let* ((app-data (cloel-get-app-data app-name))
          (tcp-channel (plist-get app-data :tcp-channel))
          (server-process (plist-get app-data :server-process)))
-    (when (process-live-p tcp-channel)
+    (when (and tcp-channel (process-live-p tcp-channel))
       (delete-process tcp-channel)
       (cloel-set-app-data app-name :tcp-channel nil)
       (message "Disconnected Clojure TCP connection for %s" app-name))
-    (when (process-live-p server-process)
+    (when (and server-process (process-live-p server-process))
       (delete-process server-process)
       (cloel-set-app-data app-name :server-process nil)
       (message "Stopped Clojure server process for %s" app-name))))
