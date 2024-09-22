@@ -161,14 +161,12 @@
     (prog1 (process-contact process :service)
       (delete-process process))))
 
-(defun cloel-escape-string-for-shell (str)
-  "Escape STR so it can be safely used as a shell argument."
-  (replace-regexp-in-string "'" "'\\''" str))
-
 (defun cloel-start-process (app-name)
   "Start the Clojure server process for APP-NAME."
   (let* ((app-data (cloel-get-app-data app-name))
          (app-file (plist-get app-data :file))
+         ;; We need change `default-directory' to application directory,
+         ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
          (default-directory (file-name-directory app-file))
          (app-file (file-name-nondirectory app-file))
          (app-dir (file-name-directory app-file))
@@ -177,6 +175,9 @@
       (error "Cannot find app file at %s" app-file))
     (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                   (format "*cloel-%s-clojure-server*" app-name)
+                                  ;; It's important to use "sh -c",
+                                  ;; otherwise ENV CLASSPATH is wrong
+                                  ;; clojure will throw error that cannot found clojure.core library
                                   "sh"
                                   "-c"
                                   (format "clojure -M %s %d"
