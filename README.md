@@ -65,3 +65,6 @@ Interfaces that can be reloaded in Clojure:
 - `handle-client-connected`: Interface for when the Client connects to the Clojure process
 
 In Clojure, we can use `alter-var-root` to reload the above interface implementations on the application side. For specifics, please refer to `demo/app.clj`
+
+## Ecosystem Applications
+[reorder-file](https://github.com/manateelazycat/reorder-file): Automatically reorders numbering within files
