@@ -67,4 +67,5 @@ Interfaces that can be reloaded in Clojure:
 In Clojure, we can use `alter-var-root` to reload the above interface implementations on the application side. For specifics, please refer to `demo/app.clj`
 
 ## Ecosystem Applications
-[reorder-file](https://github.com/manateelazycat/reorder-file): Automatically reorders numbering within files
+- [reorder-file](https://github.com/manateelazycat/reorder-file): Automatically reorders numbering within files
+- [cloel-rand-quote](https://github.com/kimim/cloel-rand-quote): Insert a random quote
