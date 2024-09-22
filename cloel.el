@@ -161,18 +161,34 @@
     (prog1 (process-contact process :service)
       (delete-process process))))
 
+(defun cloel-escape-string-for-shell (str)
+  "Escape STR so it can be safely used as a shell argument."
+  (replace-regexp-in-string "'" "'\\''" str))
+
 (defun cloel-start-process (app-name)
   "Start the Clojure server process for APP-NAME."
   (let* ((app-data (cloel-get-app-data app-name))
          (app-file (plist-get app-data :file))
+         (app-dir (file-name-directory app-file))
+         (deps-file (expand-file-name "deps.edn" app-dir))
+         (deps-content (with-temp-buffer
+                         (insert-file-contents deps-file)
+                         (buffer-string)))
+         (escaped-deps-content (cloel-escape-string-for-shell deps-content))
          (port (cloel-get-free-port)))
     (unless (file-exists-p app-file)
       (error "Cannot find app file at %s" app-file))
+    (message "Deps content: %s" deps-content)
     (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                   (format "*cloel-%s-clojure-server*" app-name)
-                                  "clojure" "-M" app-file (number-to-string port))))
+                                  "sh"
+                                  "-c"
+                                  (format "clojure -Sdeps '%s' -M %s %d"
+                                          escaped-deps-content
+                                          app-file
+                                          port))))
       (cloel-set-app-data app-name :server-process process)
-      (message "Starting Clojure server for %s on port %d" app-name port)
+      (message "Starting Clojure server for %s on port" app-name port)
       (set-process-sentinel process
                             (lambda (proc event)
                               (cloel-server-process-sentinel proc event app-name)))
