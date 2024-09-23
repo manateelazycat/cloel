@@ -1,8 +1,8 @@
 (require 'cloel)
 
-(defvar cloel-demo-clj-file (expand-file-name "app.clj" (file-name-directory load-file-name)))
+(defvar cloel-demo-dir (file-name-directory load-file-name))
 
-(cloel-register-app "demo" cloel-demo-clj-file)
+(cloel-register-app "demo" cloel-demo-dir "cloel")
 
 (defun cloel-demo-test ()
   (interactive)
@@ -18,4 +18,4 @@
   ;; STEP 8: Call Clojure method "clojure.core/+" SYNC.
   (message "Got sync result of (+ 1 2 3): %s" (cloel-demo-call-sync "clojure.core/+" 1 2 3))
   ;; STEP 9: Call Clojure method "app-success" ASYNC.
-  (cloel-demo-call-async "app-success" "Cloel rocks!"))
+  (cloel-demo-call-async 'app/app-success "Cloel rocks!"))

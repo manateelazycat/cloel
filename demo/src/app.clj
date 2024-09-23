@@ -17,8 +17,7 @@
       ;; STEP 6: Get Elisp variable SYNC.
       (println "Value of 'user-full-name' is:" (cloel/elisp-get-var "user-full-name"))
       ;; STEP 7: Call Elisp method "cloel-demo-hello-confirm" ASYNC.
-      (cloel/elisp-eval-async "cloel-demo-hello-confirm")
-      )))
+      (cloel/elisp-eval-async "cloel-demo-hello-confirm"))))
 
 (defn app-success [message]
   ;; STEP 10: Send message to Emacs ASYNC.
@@ -27,4 +26,5 @@
 (alter-var-root #'cloel/handle-client-message (constantly app-handle-client-message))
 (alter-var-root #'cloel/handle-client-connected (constantly app-handle-client-connected))
 
-(cloel/start-server (Integer/parseInt (first *command-line-args*)))
+(defn -main [& args]
+  (cloel/start-server (Integer/parseInt (last args))))

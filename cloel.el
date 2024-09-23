@@ -134,10 +134,11 @@
 
     (list start-func-name stop-func-name restart-func-name call-async-func-name call-sync-func-name send-message-func-name)))
 
-(defun cloel-register-app (app-name app-file)
+(defun cloel-register-app (app-name app-dir aliases)
   "Register an app with APP-NAME and APP-FILE."
   (puthash app-name
-           (list :file app-file
+           (list :dir app-dir
+                 :aliases aliases
                  :server-process nil
                  :tcp-channel nil)
            cloel-apps)
@@ -164,15 +165,15 @@
 (defun cloel-start-process (app-name)
   "Start the Clojure server process for APP-NAME."
   (let* ((app-data (cloel-get-app-data app-name))
-         (app-file (plist-get app-data :file))
+         (app-dir (plist-get app-data :dir))
+         (app-aliases (or (plist-get app-data :aliases) "cloel"))
          ;; We need change `default-directory' to application directory,
          ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
-         (default-directory (file-name-directory app-file))
-         (app-file (file-name-nondirectory app-file))
-         (app-dir (file-name-directory app-file))
+         (default-directory app-dir)
+         (app-deps-edn (expand-file-name "deps.edn"))
          (port (cloel-get-free-port)))
-    (unless (file-exists-p app-file)
-      (error "Cannot find app file at %s" app-file))
+    (unless (file-exists-p app-deps-edn)
+      (error "Cannot find app deps.edn at %s" app-deps-edn))
     (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                   (format "*cloel-%s-clojure-server*" app-name)
                                   ;; It's important to use "sh -c",
@@ -180,8 +181,8 @@
                                   ;; clojure will throw error that cannot found clojure.core library
                                   "sh"
                                   "-c"
-                                  (format "clojure -M %s %d"
-                                          app-file
+                                  (format "clojure -M%s %d"
+                                          app-aliases
                                           port))))
       (cloel-set-app-data app-name :server-process process)
       (message "Starting Clojure server for %s on port %d" app-name port)
