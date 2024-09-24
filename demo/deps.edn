@@ -3,4 +3,5 @@
  :paths ["src"]
 
  :aliases
- {:cloel {:main-opts ["-m" "app"]}}}
+ {:cloel {:main-opts ["-m" "app"]}
+  :dev   {:extra-paths ["dev"]}}}
