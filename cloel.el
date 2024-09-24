@@ -134,12 +134,13 @@
 
     (list start-func-name stop-func-name restart-func-name call-async-func-name call-sync-func-name send-message-func-name)))
 
-(defun cloel-register-app (app-name app-dir aliases)
+(defun cloel-register-app (app-name app-dir aliases-or-bb-task &optional clj-type)
   "Register an app with APP-NAME and APP-FILE."
   (puthash app-name
            (list :dir app-dir
+                 :type (or clj-type 'clojure)
                  :port-from-file (cloel-get-free-port-from-port-file)
-                 :aliases aliases
+                 :aliases-or-bb-task aliases-or-bb-task
                  :server-process nil
                  :tcp-channel nil)
            cloel-apps)
@@ -178,14 +179,18 @@
     (if port
         (cloel-connect-with-retry app-name "localhost" port)
       (let* ((app-dir (plist-get app-data :dir))
-             (app-aliases (or (plist-get app-data :aliases) "cloel"))
+             (clj-type (plist-get app-data :type))
+             (app-aliases (or (plist-get app-data :aliases-or-bb-task) "cloel"))
              ;; We need change `default-directory' to application directory,
              ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
              (default-directory app-dir)
              (app-deps-edn (expand-file-name "deps.edn"))
+             (app-bb-edn (expand-file-name "bb.edn"))
              (port (cloel-get-free-port)))
-        (unless (file-exists-p app-deps-edn)
+        (when (and (eq clj-type 'clojure) (not (file-exists-p app-deps-edn)))
           (error "Cannot find app deps.edn at %s" app-deps-edn))
+        (when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
+          (error "Cannot find app bb.edn at %s" app-bb-edn))
         (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                       (format "*cloel-%s-clojure-server*" app-name)
                                       ;; It's important to use "sh -c",
@@ -193,9 +198,16 @@
                                       ;; clojure will throw error that cannot found clojure.core library
                                       "sh"
                                       "-c"
-                                      (format "clojure -M%s %d"
-                                              app-aliases
-                                              port))))
+                                      (cond
+                                       ((eq clj-type 'clojure)
+                                        (format "clojure -M%s %d"
+                                                app-aliases
+                                                port))
+                                       ((eq clj-type 'bb)
+                                        (format "bb %s %d"
+                                                app-aliases
+                                                port))
+                                       (t (error "Unknown clj-type: %s" clj-type))))))
           (cloel-set-app-data app-name :server-process process)
           (message "Starting Clojure server for %s on port %d" app-name port)
           (set-process-sentinel process

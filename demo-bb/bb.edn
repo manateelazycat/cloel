@@ -1,0 +1,7 @@
+{:paths ["src"]
+
+ :deps {io.github.manateelazycat.cloel/cloel {:mvn/version "1.0.0"}}
+
+ :tasks
+ {cloel {:requires ([app])
+         :task (app/-main)}}}
