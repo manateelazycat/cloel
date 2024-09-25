@@ -1,11 +1,10 @@
 (ns cloel
   (:require [clojure.edn :as edn])
-  (:import [java.net ServerSocket Socket]
-           [java.io BufferedReader InputStreamReader PrintWriter]
-           [java.util.concurrent ConcurrentHashMap]))
+  (:import [java.io BufferedReader InputStreamReader PrintWriter]
+           [java.net ServerSocket Socket]))
 
 (def client-connection (atom nil))
-(def call-results (ConcurrentHashMap.))
+(def call-results (atom nil))
 (def call-id (atom 0))
 
 (defn send-to-client [message]
@@ -19,10 +18,10 @@
 (defn ^:export elisp-call [method & args]
   (let [id (generate-call-id)
         promise (promise)]
-    (.put call-results id promise)
+    (swap! call-results assoc id promise)
     (send-to-client {:type :call-elisp-sync :id id :method method :args args})
     (let [result (deref promise 60000 :timeout)]
-      (.remove call-results id)
+      (swap! call-results dissoc id)
       (if (= result :timeout)
         (throw (Exception. (str "Timeout waiting for Elisp response for id: " id)))
         result))))
@@ -43,21 +42,21 @@
 (defn ^:dynamic handle-client-async-call [data]
   (future
     (let [{:keys [func args]} data]
-     (try
-       (apply (resolve (symbol func)) args)
-       (catch Exception e
-         (println "Error in Clojure call:" (.getMessage e)))))))
+      (try
+        (apply (resolve (symbol func)) args)
+        (catch Exception e
+          (println "Error in Clojure call:" (.getMessage e)))))))
 
 (defn ^:dynamic handle-client-sync-call [data]
   (future
     (let [{:keys [id func args]} data
-         result (try
-                  {:value (apply (resolve (symbol func)) args)}
-                  (catch Exception e
-                    {:error (.getMessage e)}))]
-     (send-to-client {:type :clojure-sync-return
-                      :id id
-                      :result result}))))
+          result (try
+                   {:value (apply (resolve (symbol func)) args)}
+                   (catch Exception e
+                     {:error (.getMessage e)}))]
+      (send-to-client {:type :clojure-sync-return
+                       :id id
+                       :result result}))))
 
 (defn ^:dynamic handle-client-message [data]
   (println "Received message:" data))
@@ -78,7 +77,7 @@
             (println "Received from client:" data)
             (cond
               (and (map? data) (= (:type data) :elisp-sync-return))
-              (when-let [promise (.get call-results (:id data))]
+              (when-let [promise (get @call-results (:id data))]
                 (deliver promise (:value data)))
 
               (and (map? data) (= (:type data) :call-clojure-async))
