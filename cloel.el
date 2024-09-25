@@ -252,6 +252,15 @@
                                        (format "*cloel-%s-client*" app-name)
                                        host port-num)))
     (cloel-set-app-data app-name :tcp-channel channel)
+
+    ;; TODO: this is ugly
+    ;; use channel as server-process when port file exists
+    ;; so that process-live-p against :server-process works
+    (let ((app-data (cloel-get-app-data app-name)))
+      (when (and (plist-get app-data :port-from-file)
+                 (not (plist-get app-data :server-process)))
+        (cloel-set-app-data app-name :server-process channel)))
+
     (set-process-coding-system channel 'utf-8 'utf-8)
     (if (process-live-p channel)
         (progn
