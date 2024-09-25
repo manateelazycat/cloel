@@ -45,7 +45,7 @@ During development, you can use the grep "STEP" keyword to understand the struct
 Below are the API details, replace `app` with your application name:
 
 Elisp API:
-- `cloel-register-app`: Register an application, requires input of the application name and the path to the Clojure code, using `app` as an example for the application name
+- `cloel-register-app`: Register an application. You need to input the application name, application directory, alias, and clj-type. The alias can be either `clojure` or `bb`.
 - `cloel-app-start/stop/restart-process`: Manage the Clojure process
 - `cloel-app-send-message`: Elisp asynchronously sends messages to Clojure
 - `cloel-app-call-async`: Elisp asynchronously calls Clojure functions
