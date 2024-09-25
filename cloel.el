@@ -198,16 +198,11 @@
                                       ;; clojure will throw error that cannot found clojure.core library
                                       "sh"
                                       "-c"
-                                      (cond
-                                       ((eq clj-type 'clojure)
-                                        (format "clojure -M%s %d"
-                                                app-aliases
-                                                port))
-                                       ((eq clj-type 'bb)
-                                        (format "bb %s %d"
-                                                app-aliases
-                                                port))
-                                       (t (error "Unknown clj-type: %s" clj-type))))))
+                                      (pcase clj-type
+                                        ('clojure (format "clojure -M%s %d" app-aliases port))
+                                        ('bb (format "bb %s %d" app-aliases port))
+                                        (_ (error "Unknown clj-type: %s" clj-type)))
+                                      )))
           (cloel-set-app-data app-name :server-process process)
           (message "Starting Clojure server for %s on port %d" app-name port)
           (set-process-sentinel process
