@@ -138,6 +138,7 @@
   "Register an app with APP-NAME and APP-FILE."
   (puthash app-name
            (list :dir app-dir
+                 :port-from-file (cloel-get-free-port-from-port-file)
                  :aliases aliases
                  :server-process nil
                  :tcp-channel nil)
@@ -153,6 +154,14 @@
   (when-let ((app-data (cloel-get-app-data app-name)))
     (puthash app-name (plist-put app-data key value) cloel-apps)))
 
+(defun cloel-get-free-port-from-port-file ()
+  "Get port specified in .cloel-port file."
+  (let ((port-file (expand-file-name ".cloel-port" default-directory)))
+    (when (file-exists-p port-file)
+      (with-temp-buffer
+        (insert-file-contents port-file)
+        (string-to-number (buffer-string))))))
+
 (defun cloel-get-free-port ()
   "Find a free port."
   (let ((process (make-network-process :name "cloel-port-finder"
@@ -165,31 +174,34 @@
 (defun cloel-start-process (app-name)
   "Start the Clojure server process for APP-NAME."
   (let* ((app-data (cloel-get-app-data app-name))
-         (app-dir (plist-get app-data :dir))
-         (app-aliases (or (plist-get app-data :aliases) "cloel"))
-         ;; We need change `default-directory' to application directory,
-         ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
-         (default-directory app-dir)
-         (app-deps-edn (expand-file-name "deps.edn"))
-         (port (cloel-get-free-port)))
-    (unless (file-exists-p app-deps-edn)
-      (error "Cannot find app deps.edn at %s" app-deps-edn))
-    (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
-                                  (format "*cloel-%s-clojure-server*" app-name)
-                                  ;; It's important to use "sh -c",
-                                  ;; otherwise ENV CLASSPATH is wrong
-                                  ;; clojure will throw error that cannot found clojure.core library
-                                  "sh"
-                                  "-c"
-                                  (format "clojure -M%s %d"
-                                          app-aliases
-                                          port))))
-      (cloel-set-app-data app-name :server-process process)
-      (message "Starting Clojure server for %s on port %d" app-name port)
-      (set-process-sentinel process
-                            (lambda (proc event)
-                              (cloel-server-process-sentinel proc event app-name)))
-      (cloel-connect-with-retry app-name "localhost" port))))
+         (port (plist-get app-data :port-from-file)))
+    (if port
+        (cloel-connect-with-retry app-name "localhost" port)
+      (let* ((app-dir (plist-get app-data :dir))
+             (app-aliases (or (plist-get app-data :aliases) "cloel"))
+             ;; We need change `default-directory' to application directory,
+             ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
+             (default-directory app-dir)
+             (app-deps-edn (expand-file-name "deps.edn"))
+             (port (cloel-get-free-port)))
+        (unless (file-exists-p app-deps-edn)
+          (error "Cannot find app deps.edn at %s" app-deps-edn))
+        (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
+                                      (format "*cloel-%s-clojure-server*" app-name)
+                                      ;; It's important to use "sh -c",
+                                      ;; otherwise ENV CLASSPATH is wrong
+                                      ;; clojure will throw error that cannot found clojure.core library
+                                      "sh"
+                                      "-c"
+                                      (format "clojure -M%s %d"
+                                              app-aliases
+                                              port))))
+          (cloel-set-app-data app-name :server-process process)
+          (message "Starting Clojure server for %s on port %d" app-name port)
+          (set-process-sentinel process
+                                (lambda (proc event)
+                                  (cloel-server-process-sentinel proc event app-name)))
+          (cloel-connect-with-retry app-name "localhost" port))))))
 
 (defun cloel-stop-process (app-name)
   "Stop the Clojure server process and disconnect the client for APP-NAME."
@@ -240,6 +252,15 @@
                                        (format "*cloel-%s-client*" app-name)
                                        host port-num)))
     (cloel-set-app-data app-name :tcp-channel channel)
+
+    ;; TODO: this is ugly
+    ;; use channel as server-process when port file exists
+    ;; so that process-live-p against :server-process works
+    (let ((app-data (cloel-get-app-data app-name)))
+      (when (and (plist-get app-data :port-from-file)
+                 (not (plist-get app-data :server-process)))
+        (cloel-set-app-data app-name :server-process channel)))
+
     (set-process-coding-system channel 'utf-8 'utf-8)
     (if (process-live-p channel)
         (progn

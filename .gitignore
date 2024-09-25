@@ -10,3 +10,5 @@ workspace/
 .lsp
 .cpcache
 target
+.nrepl-port
+.cloel-port

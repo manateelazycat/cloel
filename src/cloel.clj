@@ -104,4 +104,5 @@
         (when (nil? @client-connection)
           (let [client-socket (.accept server-socket)]
             (future (handle-client client-socket))))))
-    (println "Waiting for client connection...")))
+    (println "Waiting for client connection...")
+    server-socket))
