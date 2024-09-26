@@ -2,7 +2,7 @@
 
 (defvar cloel-demo-dir (file-name-directory load-file-name))
 
-(cloel-register-app "demo" cloel-demo-dir "cloel" 'clojure)
+(cloel-register-app "demo" cloel-demo-dir "cloel")
 
 (defun cloel-demo-test ()
   (interactive)

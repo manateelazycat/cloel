@@ -134,13 +134,13 @@
 
     (list start-func-name stop-func-name restart-func-name call-async-func-name call-sync-func-name send-message-func-name)))
 
-(defun cloel-register-app (app-name app-dir aliases-or-bb-task &optional clj-type)
+(defun cloel-register-app (app-name app-dir &optional aliases-or-bb-task clj-type)
   "Register an app with APP-NAME and APP-FILE."
   (puthash app-name
            (list :dir app-dir
                  :type (or clj-type 'clojure)
                  :port-from-file (cloel-get-free-port-from-port-file)
-                 :aliases-or-bb-task aliases-or-bb-task
+                 :aliases-or-bb-task (or aliases-or-bb-task 'clojure)
                  :server-process nil
                  :tcp-channel nil)
            cloel-apps)
