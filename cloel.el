@@ -197,7 +197,8 @@
           (error "Cannot find app deps.edn at %s" app-deps-edn))
         (when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
           (error "Cannot find app bb.edn at %s" app-bb-edn))
-        (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
+        (if main-file 
+          (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                       (format "*cloel-%s-clojure-server*" app-name)
                                       ;; It's important to use "sh -c",
                                       ;; otherwise ENV CLASSPATH is wrong
@@ -209,12 +210,16 @@
                                         ('bb (format "bb %s %d" app-aliases port))
                                         (_ (error "Unknown clj-type: %s" clj-type)))
                                       )))
-          (cloel-set-app-data app-name :server-process process)
-          (message "Starting Clojure server for %s on port %d" app-name port)
-          (set-process-sentinel process
+            (cloel-set-app-data app-name :server-process process)
+            (message "Starting Clojure server for %s on port %d" app-name port)
+            (set-process-sentinel process
                                 (lambda (proc event)
                                   (cloel-server-process-sentinel proc event app-name)))
-          (cloel-connect-with-retry app-name "localhost" port))))))
+            (cloel-connect-with-retry app-name "localhost" port))
+	  (error "no main-file found for %s" app-name))
+
+
+	))))
 
 (defun cloel-stop-process (app-name)
   "Stop the Clojure server process and disconnect the client for APP-NAME."
