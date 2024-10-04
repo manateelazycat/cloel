@@ -183,10 +183,16 @@
              (app-aliases (or (plist-get app-data :aliases-or-bb-task) "cloel"))
              ;; We need change `default-directory' to application directory,
              ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
+             (main-file (cl-find-if (lambda (file)
+                 (and (string-prefix-p app-name (file-name-nondirectory file))
+                 (string-suffix-p ".clj" (file-name-nondirectory file))))
+                 (directory-files app-dir t "\\.clj$")))
+	     
              (default-directory app-dir)
              (app-deps-edn (expand-file-name "deps.edn"))
              (app-bb-edn (expand-file-name "bb.edn"))
              (port (cloel-get-free-port)))
+	     ;; (message "debug list: %s %s %s %s" app-aliases main-file app-deps-edn port)
         (when (and (eq clj-type 'clojure) (not (file-exists-p app-deps-edn)))
           (error "Cannot find app deps.edn at %s" app-deps-edn))
         (when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
@@ -199,7 +205,7 @@
                                       "sh"
                                       "-c"
                                       (pcase clj-type
-                                        ('clojure (format "clojure -M%s %d" app-aliases port))
+                                        ('clojure (format "clojure -M%s %s %d" app-aliases main-file port))
                                         ('bb (format "bb %s %d" app-aliases port))
                                         (_ (error "Unknown clj-type: %s" clj-type)))
                                       )))
