@@ -192,7 +192,7 @@
              (app-deps-edn (expand-file-name "deps.edn"))
              (app-bb-edn (expand-file-name "bb.edn"))
              (port (cloel-get-free-port)))
-	     ;; (message "debug list: %s %s %s %s" app-aliases main-file app-deps-edn port)
+;; (message "debug list: %s %s %s %s" app-aliases main-file app-deps-edn port)
         (when (and (eq clj-type 'clojure) (not (file-exists-p app-deps-edn)))
           (error "Cannot find app deps.edn at %s" app-deps-edn))
         (when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
