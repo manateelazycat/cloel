@@ -31,6 +31,13 @@ Cloel 是一个结合 Clojure 和 Elisp 的协同编程框架， 利用 Clojure 
    clojure -X:install
    ```
 
+   - 中国用户， 可能会面临无法访问镜像源无法访问的问题， 请使用下面命令行来安装配置
+
+   ```bash
+   clojure -Sdeps '{:mvn/repos {"central" {:url "https://maven.aliyun.com/repository/public"} "clojars" {:url "https://mirrors.tuna.tsinghua.edu.cn/clojars"}}}' -X:jar
+   clojure -Sdeps '{:mvn/repos {"central" {:url "https://maven.aliyun.com/repository/public"} "clojars" {:url "https://mirrors.tuna.tsinghua.edu.cn/clojars"}}}' -X:install
+   ```
+
 5. 测试：
    - 执行 `M-x load-file` 选择 `cloel/demo/app.el`
    - 执行 `M-x cloel-demo-test`
