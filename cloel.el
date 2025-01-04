@@ -187,13 +187,13 @@
   "Find a free port by binding to it and ensuring it remains available."
   (let (port process)
     (while (not port)
-      ;; 尝试绑定一个随机端口
+      ;; try to bind random port number
       (setq process (make-network-process :name "cloel-port-finder"
                                           :service t
                                           :host 'local
                                           :server t))
       (setq port (process-contact process :service))
-      ;; 检查端口是否仍然可用
+      ;; check if port available
       (condition-case nil
           (progn
             (delete-process process)
@@ -204,7 +204,7 @@
             (delete-process process)
             (message "Found free port: %d" port))
         (error
-         (setq port nil)  ;; 如果端口不可用，重置 port 并重试
+         (setq port nil)  ;; if port not useful, try another port
          (when process (delete-process process)))))
     port))
 
@@ -233,11 +233,11 @@
              ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
 ;;             (unless (and (file-regular-p app-dir) (string-suffix-p ".clj" app-dir))
 	     ;;             (setq default-directory app-dir))
-	      (main-file (cl-find-if (lambda (file)
-                 (and (string-prefix-p app-name (file-name-nondirectory file))
-                 (string-suffix-p ".clj" (file-name-nondirectory file))))
-                 (directory-files app-dir t "\\.clj$")))
-
+            (main-file (or (cl-find-if (lambda (file)
+                (and (string-prefix-p app-name (file-name-nondirectory file))
+                (string-suffix-p ".clj" (file-name-nondirectory file))))
+                (directory-files app-dir t "\\.clj$"))
+                (error "Cannot find .clj file for app: %s in directory: %s" app-name app-dir)))
              (default-directory app-dir)
 ;;	     (default-directory
 ;;	      (progn
@@ -265,16 +265,18 @@
                                         ('bb (format "bb %s %d" app-aliases port))
                                         (_ (error "Unknown clj-type: %s" clj-type)))
                                       )))
-	   ;; (message "Starting Clojure server with command: %s"
-           ;; (pcase clj-type
-           ;;  ('clojure (format "clojure -M:repl -m p1 %d" port))
-           ;;  ('bb (format "bb %s %d" app-aliases port))))
+	   (message "Starting Clojure server with command: %s"
+             (pcase clj-type
+             ('clojure (format "clojure -M:%s %s %d" app-aliases main-file port))
+             ('bb (format "bb %s %d" app-aliases port))))
+	   
           (cloel-set-app-data app-name :server-process process)
           (message "Starting Clojure server for %s on port %d" app-name port)
           (set-process-sentinel process
                                 (lambda (proc event)
 				  (message "clojure server process for %s has stopped: %s" app-name event)
                                   (cloel-server-process-sentinel proc event app-name)))
+	  (sleep-for 3)  ;; sleep 3s for some scenes
           (cloel-connect-with-retry app-name "localhost" port))))))
 
 (defun cloel-stop-process (app-name)
