@@ -136,15 +136,26 @@
 
 (defun cloel-register-app (app-name app-dir &optional aliases-or-bb-task clj-type)
   "Register an app with APP-NAME and APP-FILE."
+  ;; deepseek wrote:
+  (let* ((app-dir (expand-file-name app-dir))
+         (deps-edn (expand-file-name "deps.edn" app-dir))
+         (bb-edn (expand-file-name "bb.edn" app-dir))
+         (inferred-clj-type (cond
+                             ((and (file-exists-p deps-edn) (not clj-type)) 'clojure)
+                             ((and (file-exists-p bb-edn) (not clj-type)) 'bb)
+                             (t clj-type))))
+    (unless inferred-clj-type
+      (error "Cannot determine app type for directory: %s. Please provide clj-type or ensure deps.edn/bb.edn exists." app-dir))
+  ;; deepseek end ----
   (puthash app-name
            (list :dir app-dir
-                 :type (or clj-type 'clojure)
+                 :type inferred-clj-type
                  :port-from-file (cloel-get-free-port-from-port-file)
                  :aliases-or-bb-task (or aliases-or-bb-task 'clojure)
                  :server-process nil
                  :tcp-channel nil)
            cloel-apps)
-  (cloel-generate-app-functions app-name))
+  (cloel-generate-app-functions app-name)))
 
 (defun cloel-get-app-data (app-name)
   "Get the data for APP-NAME."
@@ -163,42 +174,86 @@
         (insert-file-contents port-file)
         (string-to-number (buffer-string))))))
 
+;; (defun cloel-get-free-port ()
+;;  "Find a free port."
+;;  (let ((process (make-network-process :name "cloel-port-finder"
+;;                                       :service t
+;;                                       :host 'local
+;;                                       :server t)))
+;;    (prog1 (process-contact process :service)
+;;      (delete-process process))))
+
 (defun cloel-get-free-port ()
-  "Find a free port."
-  (let ((process (make-network-process :name "cloel-port-finder"
-                                       :service t
-                                       :host 'local
-                                       :server t)))
-    (prog1 (process-contact process :service)
-      (delete-process process))))
+  "Find a free port by binding to it and ensuring it remains available."
+  (let (port process)
+    (while (not port)
+      ;; 尝试绑定一个随机端口
+      (setq process (make-network-process :name "cloel-port-finder"
+                                          :service t
+                                          :host 'local
+                                          :server t))
+      (setq port (process-contact process :service))
+      ;; 检查端口是否仍然可用
+      (condition-case nil
+          (progn
+            (delete-process process)
+            (setq process (make-network-process :name "cloel-port-checker"
+                                                :service port
+                                                :host 'local
+                                                :server t))
+            (delete-process process)
+            (message "Found free port: %d" port))
+        (error
+         (setq port nil)  ;; 如果端口不可用，重置 port 并重试
+         (when process (delete-process process)))))
+    port))
+
+(defun cloel-determine-app-type (app-dir)
+  "Determine the type of the Clojure app based on its directory structure."
+  (cond
+   ((file-exists-p (expand-file-name "deps.edn" app-dir)) 'deps)
+   ((file-exists-p (expand-file-name "bb.edn" app-dir)) 'bb)
+   ((and (file-directory-p app-dir) (directory-files app-dir t ".*\.clj")) 'clojure-directory)
+   ((and (file-regular-p app-dir) (string-suffix-p ".clj" app-dir)) 'clojure)
+   (t (error "Cannot determine app type for directory: %s" app-dir))))
+
 
 (defun cloel-start-process (app-name)
   "Start the Clojure server process for APP-NAME."
   (let* ((app-data (cloel-get-app-data app-name))
-         (port (plist-get app-data :port-from-file)))
+         (port (plist-get app-data :port-from-file))
+	 (clj-type (plist-get app-data :type)))
     (if port
-        (cloel-connect-with-retry app-name "localhost" port)
+	(cloel-connect-with-retry app-name "localhost" port)
       (let* ((app-dir (plist-get app-data :dir))
-             (clj-type (plist-get app-data :type))
+             ;; (clj-type (cloel-determine-app-type app-dir))
+;;	     (clj-type (plist-get app-data :type))
              (app-aliases (or (plist-get app-data :aliases-or-bb-task) "cloel"))
              ;; We need change `default-directory' to application directory,
              ;; otherwise `clojure' cannot found file `deps.edn' to load dependencies.
-             (main-file (cl-find-if (lambda (file)
+;;             (unless (and (file-regular-p app-dir) (string-suffix-p ".clj" app-dir))
+	     ;;             (setq default-directory app-dir))
+	      (main-file (cl-find-if (lambda (file)
                  (and (string-prefix-p app-name (file-name-nondirectory file))
                  (string-suffix-p ".clj" (file-name-nondirectory file))))
                  (directory-files app-dir t "\\.clj$")))
-	     
+
              (default-directory app-dir)
-             (app-deps-edn (expand-file-name "deps.edn"))
-             (app-bb-edn (expand-file-name "bb.edn"))
+;;	     (default-directory
+;;	      (progn
+;;		(if (and (file-regular-p app-dir) (string-suffix-p ".clj" app-dir))
+;;      (file-name-directory app-dir)
+;;      ;; Set to directory of .clj file
+;;      )))
+     	     ;; [_ (prn 'default-directory)]
+             (app-deps-edn (expand-file-name "deps.edn" app-dir))
+             (app-bb-edn (expand-file-name "bb.edn" app-dir))
              (port (cloel-get-free-port)))
-;; (message "debug list: %s %s %s %s" app-aliases main-file app-deps-edn port)
-        (when (and (eq clj-type 'clojure) (not (file-exists-p app-deps-edn)))
-          (error "Cannot find app deps.edn at %s" app-deps-edn))
-        (when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
-          (error "Cannot find app bb.edn at %s" app-bb-edn))
-        (if main-file 
-          (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
+	(when (and (eq clj-type 'clojure) (not (file-exists-p app-deps-edn)))
+	  (error "can not find app deps.edn at %s" app-deps-edn))
+	(when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
+	  (error "can not find app bb.edn at %s" app-bb-edn))
+        (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
                                       (format "*cloel-%s-clojure-server*" app-name)
                                       ;; It's important to use "sh -c",
                                       ;; otherwise ENV CLASSPATH is wrong
@@ -206,20 +261,21 @@
                                       "sh"
                                       "-c"
                                       (pcase clj-type
-                                        ('clojure (format "clojure -M%s %s %d" app-aliases main-file port))
+                                        ('clojure (format "clojure -M:%s %s  %d" app-aliases main-file port))
                                         ('bb (format "bb %s %d" app-aliases port))
                                         (_ (error "Unknown clj-type: %s" clj-type)))
                                       )))
-            (cloel-set-app-data app-name :server-process process)
-            (message "Starting Clojure server for %s on port %d" app-name port)
-            (set-process-sentinel process
+	   ;; (message "Starting Clojure server with command: %s"
+           ;; (pcase clj-type
+           ;;  ('clojure (format "clojure -M:repl -m p1 %d" port))
+           ;;  ('bb (format "bb %s %d" app-aliases port))))
+          (cloel-set-app-data app-name :server-process process)
+          (message "Starting Clojure server for %s on port %d" app-name port)
+          (set-process-sentinel process
                                 (lambda (proc event)
+				  (message "clojure server process for %s has stopped: %s" app-name event)
                                   (cloel-server-process-sentinel proc event app-name)))
-            (cloel-connect-with-retry app-name "localhost" port))
-	  (error "no main-file found for %s" app-name))
-
-
-	))))
+          (cloel-connect-with-retry app-name "localhost" port))))))
 
 (defun cloel-stop-process (app-name)
   "Stop the Clojure server process and disconnect the client for APP-NAME."
