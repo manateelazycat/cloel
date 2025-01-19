@@ -1,0 +1,26 @@
+(defun cloel-start-process (app-name)
+  "Start the Clojure server process for APP-NAME."
+  (let* ((app-data (cloel-get-app-data app-name))
+         (app-dir (plist-get app-data :dir))
+         (clj-type (plist-get app-data :type))
+         (app-aliases (or (plist-get app-data :aliases-or-bb-task) "cloel"))
+         (port (cloel-get-free-port))
+         ;; 查找以 app-name 开头并以 .clj 结尾的文件
+         (main-file (cl-find-if (lambda (file)
+                                   (and (string-prefix-p app-name (file-name-nondirectory file))
+                                        (string-suffix-p ".clj" (file-name-nondirectory file))))
+                                 (directory-files app-dir t "\\.clj$"))))  ;; 列出所有 .clj 文件
+
+    (if main-file
+        (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
+                                      (format "*cloel-%s-clojure-server*" app-name)
+                                      "sh"
+                                      "-c"
+                                      (format "clojure -M %s %s" app-aliases main-file))))  ;; 加载找到的主文件
+          (cloel-set-app-data app-name :server-process process)
+          (set-process-sentinel process
+                                (lambda (proc event)
+                                  (cloel-server-process-sentinel proc event app-name)))
+          (message "Starting Clojure server for %s on port %d" app-name port)
+          (cloel-connect-with-retry app-name "localhost" port))
+      (error "No main file found for %s" app-name))))  ;; 如果没有找到主文件则报错
