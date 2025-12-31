@@ -73,5 +73,5 @@ In Clojure, we can use `alter-var-root` to reload the above interface implementa
 
 ## Todo
 - GUI Stack
-- steam-flow-io to clojure server
+- stream-data-io to clojure server
 - support E/S model in Windows
