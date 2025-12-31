@@ -70,3 +70,8 @@ In Clojure, we can use `alter-var-root` to reload the above interface implementa
 - [reorder-file](https://github.com/manateelazycat/reorder-file): Automatically reorders numbering within files
 - [cloel-rand-quote](https://github.com/kimim/cloel-rand-quote): Insert a random quote
 - [cloel-agent](https://github.com/carrot93/cloel-agent): Emacs auto coding cloel-agent for ollama
+
+## Todo
+- GUI Stack
+- steam-flow-io to clojure server
+- support E/S model in Windows
