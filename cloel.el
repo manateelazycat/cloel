@@ -121,6 +121,17 @@
   :type 'string
   :group 'cloel)
 
+(defun cloel--normalize-path (path)
+  "Convert PATH to absolute form with forward slashes for JVM/Clojure."
+  (let ((expanded (expand-file-name path)))
+    (replace-regexp-in-string "\\\\" "/" expanded)))
+
+(defun cloel--get-app-root (norm-path)
+  "Determine the logic root directory based on input path."
+  (if (file-directory-p norm-path)
+      (file-name-as-directory norm-path)
+    (file-name-directory norm-path)))
+
 
 (defun cloel-log-error (format-string &rest args)
   "Log an error message using FORMAT-STRING and ARGS."
@@ -180,17 +191,19 @@
 
     (list start-func-name stop-func-name restart-func-name call-async-func-name call-sync-func-name send-message-func-name)))
 
-(defun cloel-register-app (app-name app-dir &optional aliases-or-bb-task clj-type)
-  "Register an app with APP-NAME and APP-DIR."
-  (let* ((app-dir (expand-file-name app-dir))
-         (inferred-clj-type (or clj-type (cloel-determine-app-type app-dir))))
-    (unless inferred-clj-type
-      (error "Cannot determine app type for directory: %s. Please provide clj-type or ensure deps.edn/bb.edn exists." app-dir))
+(defun cloel-register-app (app-name app-path &optional aliases-or-bb-task clj-type)
+  "Register a Cloel app. Handles directory or single .clj file."
+  (let* ((norm-path (cloel--normalize-path app-path))
+         (root-dir (cloel--get-app-root norm-path))
+         (inferred-type (or clj-type (cloel-determine-app-type norm-path))))
+    (unless inferred-type
+      (error "Cloel: Cannot determine type for path %s" norm-path))
     (puthash app-name
-             (list :dir app-dir
-                   :type inferred-clj-type
-                   :port-from-file (cloel-get-free-port-from-port-file)
-                   :aliases-or-bb-task (or aliases-or-bb-task 'clojure)
+             (list :root root-dir
+                   :main-path norm-path
+                   :type inferred-type
+                   :aliases (or aliases-or-bb-task "cloel")
+                   :port-from-file (let ((default-directory root-dir)) (cloel-get-free-port-from-port-file))
                    :server-process nil
                    :tcp-channel nil)
              cloel-apps)
@@ -247,14 +260,15 @@
          (when process (delete-process process)))))
     port))
 
-(defun cloel-determine-app-type (app-dir)
+(defun cloel-determine-app-type (path)
   "Determine the type of the Clojure app based on its directory structure."
-  (cond
-   ((file-exists-p (expand-file-name "deps.edn" app-dir)) 'deps)
-   ((file-exists-p (expand-file-name "bb.edn" app-dir)) 'bb)
-   ((and (file-directory-p app-dir) (directory-files app-dir t ".*\.clj")) 'clojure-directory)
-   ((and (file-regular-p app-dir) (string-suffix-p ".clj" app-dir)) 'clojure)
-   (t (error "Cannot determine app type for directory: %s" app-dir))))
+  (let ((root (cloel--get-app-root path)))
+    (cond
+     ((file-exists-p (expand-file-name "deps.edn" root)) 'deps)
+     ((file-exists-p (expand-file-name "bb.edn" root)) 'bb)
+     ((and (file-directory-p path) (directory-files path t ".*\\.clj$")) 'clojure-directory)
+     ((string-suffix-p ".clj" path) 'clojure)
+     (t (error "Cloel: Cannot determine type for path %s" path)))))
 
 
 (defun cloel-find-main-file (app-name app-dir)
@@ -275,6 +289,9 @@
      ((file-exists-p (expand-file-name (format "%s.clj" app-name) app-dir))
       (expand-file-name (format "%s.clj" app-name) app-dir))
 
+     ((file-regular-p app-dir) app-dir)
+
+
      ;; Finally, look for any .clj file in app-dir
      ((directory-files app-dir t "\\.clj$")
       (car (directory-files app-dir t "\\.clj$")))
@@ -284,47 +301,40 @@
 
 
 (defun cloel-start-process (app-name)
-  "Start the Clojure server process for APP-NAME."
-  (let* ((app-data (cloel-get-app-data app-name))
-         (port (plist-get app-data :port-from-file))
-         (clj-type (plist-get app-data :type)))
-    (if port
-        (cloel-connect-with-retry app-name "localhost" port)
-      (let* ((app-dir (plist-get app-data :dir))
-             (app-aliases (or (plist-get app-data :aliases-or-bb-task) "cloel"))
-             (main-file (cloel-find-main-file app-name app-dir))
-             (default-directory app-dir)
-             (app-deps-edn (expand-file-name "deps.edn" app-dir))
-             (app-bb-edn (expand-file-name "bb.edn" app-dir))
-             (port (cloel-get-free-port)))
-        (when (and (eq clj-type 'clojure) (not (file-exists-p app-deps-edn)))
-          (error "can not find app deps.edn at %s" app-deps-edn))
-        (when (and (eq clj-type 'deps) (not (file-exists-p app-deps-edn)))
-          (error "can not find app deps.edn at %s" app-deps-edn))
-        (when (and (eq clj-type 'bb) (not (file-exists-p app-bb-edn)))
-          (error "can not find app bb.edn at %s" app-bb-edn))
-        (let ((process (start-process (format "cloel-%s-clojure-server" app-name)
-                                      (format "*cloel-%s-clojure-server*" app-name)
-                                      "sh"
-                                      "-c"
-                                      (pcase clj-type
-                                        ('clojure (format "clojure -M:%s %s %d" app-aliases main-file port))
-                                        ('deps (format "clojure -M:%s %s %d" app-aliases main-file port))
-                                        ('bb (format "bb %s %d" app-aliases port))
-                                        (_ (error "Unknown clj-type: %s" clj-type))))))
-          (message "Starting Clojure server with command: %s"
-                   (pcase clj-type
-                     ('clojure (format "clojure -M:%s %s %d" app-aliases main-file port))
-                     ('deps (format "clojure -M:%s %s %d" app-aliases main-file port))
-                     ('bb (format "bb %s %d" app-aliases port))))
-          (cloel-set-app-data app-name :server-process process)
-          (message "Starting Clojure server for %s on port %d" app-name port)
-          (set-process-sentinel process
-                                (lambda (proc event)
-                                  (message "clojure server process for %s has stopped: %s" app-name event)
-                                  (cloel-server-process-sentinel proc event app-name)))
-          (sleep-for 3)  ;; sleep 3s for some scenes
-          (cloel-connect-with-retry app-name "localhost" port))))))
+  "Start the Clojure server using Anchor-Point and Relative Path strategy."
+  (let* ((data (cloel-get-app-data app-name))
+         (root-dir (plist-get data :root))
+         (clj-type (plist-get data :type))
+         (aliases (plist-get data :aliases))
+         (port-f (plist-get data :port-from-file))
+         (main-abs (cloel-find-main-file app-name (plist-get data :main-path)))
+         (buf (format "*cloel-%s-server*" app-name)))
+
+    (if port-f
+        (cloel-connect-with-retry app-name "localhost" port-f)
+      (let* ((port (cloel-get-free-port))
+             (rel-main (file-relative-name main-abs root-dir))
+             (alias-flag (cond
+                          ((or (not aliases) (string-empty-p (format "%s" aliases))) "-M")
+                          (t (format "-M:%s" aliases))))
+             ;; 注入 UTF-8 编码设置
+             (cmd (pcase clj-type
+                    ('bb (format "bb %s %d" aliases port))
+                    (_ (format "clojure -J-Dfile.encoding=UTF-8 %s %s %d" alias-flag rel-main port)))))
+        
+        (when (process-live-p (plist-get data :server-process))
+          (cloel-stop-process app-name))
+
+        (let ((default-directory root-dir)
+              (process-connection-type nil))
+          (message "Cloel: Launching [%s] with command: %s" app-name cmd)
+          (let ((proc (if (eq system-type 'windows-nt)
+                          (start-process (format "cloel-%s" app-name) buf "cmd.exe" "/c" cmd)
+                        (start-process-shell-command (format "cloel-%s" app-name) buf cmd))))
+            (set-process-coding-system proc 'utf-8 'utf-8)
+            (cloel-set-app-data app-name :server-process proc)
+            (set-process-sentinel proc (lambda (p e) (cloel-server-process-sentinel p e app-name)))
+            (run-at-time 2.0 nil #'cloel-connect-with-retry app-name "localhost" port)))))))
 
 (defun cloel-stop-process (app-name)
   "Stop the Clojure server process and disconnect the client for APP-NAME."
