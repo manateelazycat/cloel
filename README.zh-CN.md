@@ -76,3 +76,4 @@ Clojure 可以被重载的接口：
 ## 生态应用
 - [reorder-file](https://github.com/manateelazycat/reorder-file): 自动排序文件中的序号
 - [cloel-rand-quote](https://github.com/kimim/cloel-rand-quote): 插入一句格言警句（英语）
+- [cloel-agent](https://gitcode.com/sme_engine/cloel-agent): cloel-agent client(默认支持ollama和本地agent）
