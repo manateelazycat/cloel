@@ -66,8 +66,8 @@
 
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
-        reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket)))
-        writer (PrintWriter. (.getOutputStream client-socket))]
+        reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket) "UTF-8"))
+        writer (PrintWriter. (.getOutputStream client-socket) true "UTF-8")]
     (reset! client-connection {:socket client-socket :reader reader :writer writer})
     (handle-client-connected client-id)
     (try
