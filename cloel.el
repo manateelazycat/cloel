@@ -90,7 +90,7 @@
 (defvar cloel-max-retries 5
   "Maximum number of connection retries.")
 
-(defvar cloel-retry-delay 1
+(defvar cloel-retry-delay 2
   "Delay in seconds between connection retries.")
 
 (defvar cloel-sync-call-results (make-hash-table :test 'equal)
@@ -101,12 +101,12 @@
   "Clojure Bridge for Emacs."
   :group 'applications)
 
-(defcustom cloel-max-retries 5
+(defcustom cloel-max-retries 7
   "Maximum number of connection retries."
   :type 'integer
   :group 'cloel)
 
-(defcustom cloel-retry-delay 1
+(defcustom cloel-retry-delay 3
   "Delay in seconds between connection retries."
   :type 'number
   :group 'cloel)
@@ -434,6 +434,7 @@
           (:clojure-sync-return (cloel-handle-sync-return data))
           (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
 
+
 (defun cloel-handle-sync-call (proc data app-name)
   "Handle a call from the Clojure server for APP-NAME."
   (let* ((id (gethash :id data))
@@ -486,12 +487,15 @@
 
 (defun cloel-call-async (app-name func &rest args)
   "Call Clojure function FUNC with ARGS for APP-NAME."
-  (cloel-send-message app-name
-                      (let ((message (make-hash-table :test 'equal)))
-                        (puthash :type :call-clojure-async message)
-                        (puthash :func func message)
-                        (puthash :args args message)
-                        message)))
+  (let ((timeout 30))  ;; 设置超时（例如30秒）
+    (cloel-send-message app-name
+                        (let ((message (make-hash-table :test 'equal)))
+                          (puthash :type :call-clojure-async message)
+                          (puthash :func func message)
+                          (puthash :args args message)
+                          message))
+    (run-at-time timeout nil (lambda () (message "Clojure call timeout")))))
+
 
 (defun cloel-call-sync (app-name func &rest args)
   "Synchronously call Clojure function FUNC with ARGS for APP-NAME and return the result."

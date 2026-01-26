@@ -1,6 +1,6 @@
 (ns cloel
   (:require [clojure.edn :as edn])
-  (:import [java.io BufferedReader InputStreamReader PrintWriter]
+  (:import [java.io BufferedReader InputStreamReader PrintWriter OutputStreamWriter]
            [java.net ServerSocket Socket]))
 
 (def client-connection (atom nil))
@@ -67,7 +67,8 @@
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
         reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket) "UTF-8"))
-        writer (PrintWriter. (.getOutputStream client-socket) true "UTF-8")]
+        output-stream (.getOutputStream client-socket)
+        writer (PrintWriter. (OutputStreamWriter. output-stream "UTF-8") true)]
     (reset! client-connection {:socket client-socket :reader reader :writer writer})
     (handle-client-connected client-id)
     (try
