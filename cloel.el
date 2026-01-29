@@ -419,20 +419,73 @@
           (process-send-string channel (concat encoded-message "\n")))
       (error "Not connected to Clojure server for %s" app-name))))
 
+(defvar cloel--read-buffers (make-hash-table :test 'equal)
+  "Hash table to store partial read buffers for each process.")
+
 (defun cloel-tcp-connection-filter (proc output app-name)
-  "Handle output from the Clojure server for APP-NAME."
+  "Handle output from the Clojure server for APP-NAME.
+Implements line-buffering to handle TCP packet fragmentation."
+  ;; add process buffer to debug
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
     (insert output))
-  (when-let ((data (condition-case err
-                       (parseedn-read-str output)
-                     (error (message "Error parsing output for %s: %S" app-name err) nil))))
-    (if (and (hash-table-p data) (gethash :type data))
-        (cl-case (gethash :type data)
-          (:call-elisp-sync (cloel-handle-sync-call proc data app-name))
-          (:call-elisp-async (cloel-handle-async-call data app-name))
-          (:clojure-sync-return (cloel-handle-sync-return data))
-          (t (message "Received unknown message type for %s: %s" app-name (gethash :type data)))))))
+  
+  ;; line queue cache
+  (let* ((proc-id (process-id proc))
+         (existing-buffer (gethash proc-id cloel--read-buffers ""))
+         (combined (concat existing-buffer output))
+         (lines nil)
+         (remaining nil))
+    
+    ;; split by (\n or \r\n)
+    (with-temp-buffer
+      (insert combined)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (condition-case nil
+            (progn
+              (end-of-line)
+              (when (looking-at "\r?\n")
+                (let ((line (buffer-substring-no-properties (line-beginning-position) (point))))
+                  (push line lines))
+                (forward-line)
+                (setq remaining (buffer-substring-no-properties (point) (point-max)))))
+          (error 
+           ;; not full line, wait for more data
+           (setq remaining (buffer-substring-no-properties (point) (point-max)))
+           (goto-char (point-max))))))
+    
+    ;; update buffer ( keep not full line)
+    (puthash proc-id (or remaining "") cloel--read-buffers)
+    
+    ;; parse line
+    (dolist (line (reverse lines))
+      (when (and line (not (string-blank-p line)))
+        (condition-case err
+            (when-let ((data (parseedn-read-str line)))
+              (if (and (hash-table-p data) (gethash :type data))
+                  (cl-case (gethash :type data)
+                    (:call-elisp-sync (cloel-handle-sync-call proc data app-name))
+                    (:call-elisp-async (cloel-handle-async-call data app-name))
+                    (:clojure-sync-return (cloel-handle-sync-return data))
+                    (t (message "Received unknown message type for %s: %s" 
+                               app-name (gethash :type data))))
+                (message "Received message without type for %s: %S" app-name data)))
+          (error 
+           (message "Cloel: Error parsing EDN line for %s: %S | Line: %s" 
+                   app-name err line)))))))
+
+(defun cloel-clear-read-buffer (proc)
+  "Clear the read buffer for a process."
+  (remhash (process-id proc) cloel--read-buffers))
+
+;; link break clean buffer
+(defun cloel-tcp-connection-sentinel (proc event app-name)
+  "Monitor the network connection for APP-NAME."
+  (when (string-match "\\(closed\\|connection broken by remote peer\\)" event)
+    (message "TCP connection to server for %s was closed" app-name)
+    (cloel-clear-read-buffer proc)  ;; clean buffer
+    (cloel-set-app-data app-name :tcp-channel nil)))
 
 
 (defun cloel-handle-sync-call (proc data app-name)
@@ -479,22 +532,19 @@
           (error "Invalid function or arguments"))
       (error (message "Error in async eval for %s: %s" app-name (error-message-string err))))))
 
-(defun cloel-tcp-connection-sentinel (proc event app-name)
-  "Monitor the network connection for APP-NAME."
-  (when (string-match "\\(closed\\|connection broken by remote peer\\)" event)
-    (message "TCP connection to server for %s was closed" app-name)
-    (cloel-set-app-data app-name :tcp-channel nil)))
+
 
 (defun cloel-call-async (app-name func &rest args)
-  "Call Clojure function FUNC with ARGS for APP-NAME."
-  (let ((timeout 30))  ;; 设置超时（例如30秒）
-    (cloel-send-message app-name
-                        (let ((message (make-hash-table :test 'equal)))
-                          (puthash :type :call-clojure-async message)
-                          (puthash :func func message)
-                          (puthash :args args message)
-                          message))
-    (run-at-time timeout nil (lambda () (message "Clojure call timeout")))))
+  "Call Clojure function FUNC with ARGS for APP-NAME.
+FUNC should be a string naming the function in Clojure namespace."
+  ;; confirm args to be list，not nil or other
+  (let ((message (make-hash-table :test 'equal)))
+    (puthash :type :call-clojure-async message)
+    (puthash :func (if (symbolp func) (symbol-name func) (format "%s" func)) message)
+    ;; confirm args is vector format
+    ;; (campitable with Clojurevector)
+    (puthash :args (apply #'vector args) message)
+    (cloel-send-message app-name message)))
 
 
 (defun cloel-call-sync (app-name func &rest args)
