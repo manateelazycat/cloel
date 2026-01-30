@@ -1,4 +1,4 @@
-+(ns cloel
+(ns cloel
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
   )
@@ -11,21 +11,29 @@
 (def call-id (atom 0))
 
 (defn send-to-client [message]
-  "Send message to Emacs client with proper flushing and error handling"
-  (when-let [writer (:writer @client-connection)]
-    (try
-      ;; pr-str: confirm compat EDN data.
-      (let [line (pr-str message)]
-        (when (or (str/includes? line "\n") (str/includes? line "\r"))
-          (println "WARN: Message contains newline, may corrupt protocol:" line))
-        (.println writer line)  ;; println 添加一个换行
-        (.flush writer))
-      (catch Exception e
-        (println "ERROR: Failed to send to client:" (.getMessage e))
-        ;; 如果发送失败，可能是连接已断开，尝试清理
-        (when (.isClosed (:socket @client-connection))
-          (reset! client-connection nil))))))
-
+  "Send message to Emacs client with null-check and error recovery"
+  (let [conn @client-connection]
+    (if (and conn (:writer conn))
+      (try
+        (let [line (pr-str message)
+              writer (:writer conn)]
+          ;; 防御性检查换行符
+          (when (or (str/includes? line "\n") (str/includes? line "\r"))
+            (println "[SEND-WARN] Message contains newline:" (subs line 0 (min 50 (count line)))))
+          (.println writer line)
+          (.flush writer)
+          true)  ;; 返回成功
+        (catch Exception e
+          (println "[SEND-ERROR] Failed to send:" (.getMessage e))
+          ;; 仅在实际异常时重置连接，而非 preemptively
+          (when (instance? java.net.SocketException e)
+            (println "[SEND] Resetting connection due to socket error")
+            (reset! client-connection nil))
+          false))
+      (do
+        (println "[SEND-ERROR] No active connection or writer is nil")
+        false))))
+	
 (defn generate-call-id []
   (swap! call-id inc))
 
@@ -44,7 +52,10 @@
   (elisp-call :get-func-result func args))
 
 (defn ^:export elisp-eval-async [func & args]
-  (send-to-client {:type :call-elisp-async :func func :args args}))
+  (try
+    (send-to-client {:type :call-elisp-async :func func :args args})
+    (catch Exception e
+      (println "[ASYNC-ERROR] elisp-eval-async failed:" (.getMessage e)))))
 
 (defn ^:export elisp-show-message [& args]
   (let [message (apply str args)]
@@ -53,7 +64,7 @@
 (defn ^:export elisp-get-var [var-name]
   (elisp-call :get-var-result var-name))
 
-;; default data processor, covered by app
+;; 默认处理器（将被应用程序覆盖）
 (defn ^:dynamic handle-client-async-call [data]
   (future
     (try
@@ -87,59 +98,69 @@
 (defn ^:dynamic handle-client-connected [client-id]
   (println "Client connected:" client-id))
 
-;; match the message type: key or string
+;; 关键修复：健壮的类型匹配（同时接受关键字和字符串）
 (defn- match-msg-type? [actual-type expected-type]
   (or (= actual-type expected-type)
       (= (keyword actual-type) expected-type)
       (= actual-type (name expected-type))))
 
-;; keep-alive handle-client
+;; 在 handle-client 中确保异常不会杀死连接处理循环
 (defn handle-client [^Socket client-socket]
   (let [client-id (.toString (.getRemoteSocketAddress client-socket))
         reader (BufferedReader. (InputStreamReader. (.getInputStream client-socket) "UTF-8"))
-        output-stream (.getOutputStream client-socket)
-        writer (PrintWriter. (OutputStreamWriter. output-stream "UTF-8") true)]
+        writer (PrintWriter. (OutputStreamWriter. (.getOutputStream client-socket) "UTF-8") true)]
     
+    ;; 原子操作设置连接
     (reset! client-connection {:socket client-socket :reader reader :writer writer})
-    (println "[CLOEL] Client connected:" client-id)
+    (println "[CONN] Handler started for:" client-id)
     
     (try
-      ;; mesg to app
+      ;; 通知连接建立
       (handle-client-connected client-id)
       
-      ;; loop to read EDN by line
+      ;; 读取循环：确保即使单条消息处理失败也不中断连接
       (loop []
-        (when-let [line (.readLine reader)]  ;; readLine to \n 
-          (try
-            (let [data (edn/read-string {:readers *data-readers*} line)]
-              (cond
-                ;; Elisp sync
-                (and (map? data) (= (:type data) :elisp-sync-return))
-                (when-let [promise (get @call-results (:id data))]
-                  (deliver promise (:value data)))
-                
-                ;; Clojure async
-                (and (map? data) (= (:type data) :call-clojure-async))
-                (handle-client-async-call data)
-                
-                ;; Clojure sync
-                (and (map? data) (= (:type data) :call-clojure-sync))
-                (handle-client-sync-call data)
-                
-                ;; other
-                :else
-                (handle-client-message data)))
-            (catch Exception e
-              (println "[CLOEL] Error processing message:" (.getMessage e))
-              (println "[CLOEL] Problematic line:" line)))
-          (recur)))
+        (when-let [line (try (.readLine reader) 
+                             (catch Exception e 
+                               (println "[READ-ERROR]" (.getMessage e))
+                               nil))]
+          (if (str/blank? line)
+            (recur)  ;; 跳过空行
+            (do
+              (try
+                (let [data (edn/read-string {:readers *data-readers*} line)]
+                  (cond
+                    ;; 处理同步返回（来自 Emacs 的响应）
+                    (and (map? data) (= (:type data) :elisp-sync-return))
+                    (when-let [promise (get @call-results (:id data))]
+                      (deliver promise (:value data)))
+                    
+                    ;; 处理异步调用
+                    (and (map? data) (= (:type data) :call-clojure-async))
+                    (do (println "[RECV] Async call:" (:func data))
+                        (handle-client-async-call data))
+                    
+                    ;; 处理同步调用
+                    (and (map? data) (= (:type data) :call-clojure-sync))
+                    (do (println "[RECV] Sync call:" (:func data))
+                        (handle-client-sync-call data))
+                    
+                    ;; 其他类型
+                    :else
+                    (handle-client-message data)))
+                (catch Exception e
+                  (println "[PARSE-ERROR] Failed to parse line:" (.getMessage e))
+                  (println "[PARSE-ERROR] Line content:" (subs line 0 (min 100 (count line))))))
+              (recur)))))
       
       (catch Exception e
-        (println "[CLOEL] Client disconnected:" (.getMessage e)))
+        (println "[CONN] Client disconnected or error:" (.getMessage e)))
       
       (finally
-        (println "[CLOEL] Cleaning up connection for:" client-id)
-        (reset! client-connection nil)
+        (println "[CONN] Cleaning up connection for:" client-id)
+        ;; 关键：仅清理当前 socket 的连接
+        (when (= (:socket @client-connection) client-socket)
+          (reset! client-connection nil))
         (try (.close client-socket) (catch Exception _))))))
 
 (defn ^:export start-server [port]
@@ -147,7 +168,7 @@
         server-socket (ServerSocket. port-num)]
     (println "Server started on port" port-num)
     
-    ;; using Thread except future to be loop long-time
+    ;; 使用线程而非 future，确保长期运行
     (doto (Thread. 
            (fn []
              (try
@@ -164,12 +185,12 @@
     
     (println "Waiting for client connection...")))
 
-;; keep-alive main thread, avoid CPU load
+;; 保持主线程存活（修正：避免占用 CPU）
 (defn ^:export keep-alive []
   (println "Main thread entering keep-alive loop...")
   (loop []
     (Thread/sleep 1000)
-    ;; check the connection healthy
+    ;; 检查连接健康状态（可选）
     (when-let [conn @client-connection]
       (when (.isClosed (:socket conn))
         (println "Detected closed connection, resetting")
