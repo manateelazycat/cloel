@@ -9,7 +9,7 @@
 ;; Version: 0.1
 ;; Last-Updated: 2024-09-19 23:08:26
 ;;           By: Andy Stewart
-;; URL: https://www.github.org/manateelazycat/cloel 
+;; URL: https://www.github.org/manateelazycat/cloel
 ;; Keywords:
 ;; Compatibility: GNU Emacs 31.0.50
 ;;
@@ -168,7 +168,7 @@ On Unix, uses SIGTERM then SIGKILL."
                   (when (process-live-p process)
                     (delete-process process)
                     (message "Force deleted process on Windows"))))
-            (error 
+            (error
              (message "Error interrupting process on Windows: %s, forcing delete" (error-message-string err))
              (delete-process process))))
       (let ((pid (process-id process)))
@@ -246,7 +246,7 @@ On Unix, uses SIGTERM then SIGKILL."
 
 (defun cloel-set-app-data (app-name key value)
   "Set KEY to VALUE for APP-NAME."
-  (when-let ((app-data (cloel-get-app-data app-name)))
+  (when-let* ((app-data (cloel-get-app-data app-name)))
     (puthash app-name (plist-put app-data key value) cloel-apps)))
 
 (defun cloel-get-free-port-from-port-file ()
@@ -340,9 +340,9 @@ Returns t if server is ready, nil otherwise."
   (let ((start-time (current-time))
         (ready nil)
         (process-died nil))
-    (message "Waiting up to %d seconds for %s to be ready on port %d..." 
+    (message "Waiting up to %d seconds for %s to be ready on port %d..."
              timeout-seconds app-name port)
-    (while (and (not ready) 
+    (while (and (not ready)
                 (not process-died)
                 (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))
       ;; Check if process died
@@ -362,8 +362,8 @@ Returns t if server is ready, nil otherwise."
       (unless ready
         (sleep-for cloel--poll-interval)))
     (if ready
-        (message "Server %s is ready on port %d after %.1f seconds" 
-                 app-name port 
+        (message "Server %s is ready on port %d after %.1f seconds"
+                 app-name port
                  (float-time (time-subtract (current-time) start-time)))
       (if process-died
           (message "Server process for %s died before ready" app-name)
@@ -394,7 +394,7 @@ Returns t if server is ready, nil otherwise."
              (cmd (if cloel--windows-p
                       (format "cmd.exe /c chcp 65001 > nul && %s" base-cmd)
                     base-cmd)))
-        
+
         (when (process-live-p (plist-get data :server-process))
           (cloel-stop-process app-name))
 
@@ -422,7 +422,7 @@ Waits for server to be ready, then connects with retry logic."
           (let ((buf (get-buffer (format "*cloel-%s-server*" app-name))))
             (when buf
               (with-current-buffer buf
-                (message "Last output: %s" 
+                (message "Last output: %s"
                          (buffer-substring (max (point-min) (- (point-max) 500)) (point-max))))))
           (cloel-set-app-data app-name :server-process nil))
       ;; Wait for server to signal ready or port to open
@@ -543,14 +543,14 @@ Handles both Unix (\\n) and Windows (\\r\\n) line endings."
   (with-current-buffer (process-buffer proc)
     (goto-char (point-max))
     (insert output))
-  
+
   (let* ((proc-id (process-id proc))
          (existing-buffer (gethash proc-id cloel--read-buffers ""))
          (normalized-output (replace-regexp-in-string "\r\n" "\n" output))
          (combined (concat existing-buffer normalized-output))
          (lines nil)
          (remaining nil))
-    
+
     (with-temp-buffer
       (insert combined)
       (goto-char (point-min))
@@ -563,26 +563,26 @@ Handles both Unix (\\n) and Windows (\\r\\n) line endings."
                   (push line lines))
                 (forward-line)
                 (setq remaining (buffer-substring-no-properties (point) (point-max)))))
-          (error 
+          (error
            (setq remaining (buffer-substring-no-properties (point) (point-max)))
            (goto-char (point-max))))))
-    
+
     (puthash proc-id (or remaining "") cloel--read-buffers)
-    
+
     (dolist (line (reverse lines))
       (when (and line (not (string-blank-p line)))
         (condition-case err
-            (when-let ((data (parseedn-read-str line)))
+            (when-let* ((data (parseedn-read-str line)))
               (if (and (hash-table-p data) (gethash :type data))
                   (cl-case (gethash :type data)
                     (:call-elisp-sync (cloel-handle-sync-call proc data app-name))
                     (:call-elisp-async (cloel-handle-async-call data app-name))
                     (:clojure-sync-return (cloel-handle-sync-return data))
-                    (t (message "Received unknown message type for %s: %s" 
+                    (t (message "Received unknown message type for %s: %s"
                                app-name (gethash :type data))))
                 (message "Received message without type for %s: %S" app-name data)))
-          (error 
-           (message "Cloel: Error parsing EDN line for %s: %S | Line: %s" 
+          (error
+           (message "Cloel: Error parsing EDN line for %s: %S | Line: %s"
                    app-name err line)))))))
 
 (defun cloel-clear-read-buffer (proc)
